@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Yonder's mark from the window's sidebar: one device here, one over there. -->
+  <rect x="24" y="24" width="464" height="464" rx="104" fill="#3F4FCF"/>
+  <circle cx="225" cy="287" r="17" fill="#FFFFFF"/>
+  <circle cx="272" cy="240" r="17" fill="#FFFFFF"/>
+  <circle cx="150" cy="362" r="56" fill="#FFFFFF"/>
+  <circle cx="362" cy="150" r="46" fill="none" stroke="#FFFFFF" stroke-width="34"/>
+</svg>

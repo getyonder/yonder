@@ -1,0 +1,144 @@
+/* One window: a sidebar and a main area. Colours follow the system's light or dark setting. */
+@font-face { font-family: "Bricolage Grotesque"; src: url(fonts/bricolage-grotesque.woff2) format("woff2"); font-weight: 600 700; font-display: block }
+@font-face { font-family: "Figtree"; src: url(fonts/figtree.woff2) format("woff2"); font-weight: 400 600; font-display: block }
+
+:root {
+  --win: #FBFBFE; --side: #E4E7F1; --ink: #1B1E2E; --muted: #5D6381;
+  --line: #D3D7E6; --accent: #3F4FCF; --accent-ink: #FFFFFF; --accent-soft: #E2E5FA;
+  --ok: #1E8A5A; --warn: #A86400; --bad: #B3261E; --off: #9096AD; --scrim: rgba(27,30,46,.45);
+  --shadow: 0 18px 50px rgba(27,30,46,.16);
+  --display: "Bricolage Grotesque", "Figtree", system-ui, sans-serif;
+  --body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --win: #191C29; --side: #141722; --ink: #E8EAF5; --muted: #9BA1BE;
+  --line: #2C3044; --accent: #8E9BFF; --accent-ink: #10121B; --accent-soft: #262B4A;
+  --ok: #5DD39E; --warn: #F0B44C; --bad: #FF8A80; --off: #5F6583; --scrim: rgba(5,6,12,.6);
+  --shadow: 0 18px 50px rgba(0,0,0,.5); color-scheme: dark } }
+
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+html, body { height: 100%; margin: 0 }
+body { background: var(--win); color: var(--ink); font: 15px/1.5 var(--body); user-select: none; -webkit-user-select: none; cursor: default; overflow: hidden }
+h2 { font: 600 20px/1.3 var(--display); margin: 0 }
+p { margin: 0 }
+button { font: inherit; color: inherit; cursor: pointer }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+
+.win { position: relative; height: 100%; display: grid; grid-template-columns: 196px minmax(0, 1fr) }
+.side { background: var(--side); padding: 18px 12px; display: flex; flex-direction: column; gap: 18px; min-height: 0 }
+.mark { font: 700 22px/1 var(--display); letter-spacing: -.01em; padding: 0 8px; display: flex; align-items: center; gap: 8px }
+.mark svg { flex: none }
+.mark small { font: 400 12px/1 var(--body); letter-spacing: 0; color: var(--muted); align-self: flex-end; padding-bottom: 2px }
+.nav { display: flex; flex-direction: column; gap: 2px }
+.nav button { border: 0; background: transparent; text-align: left; padding: 8px 10px; border-radius: 7px; font-weight: 500; color: var(--muted); display: flex; justify-content: space-between; align-items: center }
+.nav button[aria-current="page"] { background: var(--win); color: var(--ink) }
+.count { font: 500 12px var(--mono); background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 1px 7px }
+.me { margin-top: auto; padding: 10px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 2px }
+.me b { color: var(--ink); font-weight: 600; font-size: 14px; overflow-wrap: anywhere }
+.me .problem { color: var(--warn) }
+
+.main { padding: 22px 24px; display: flex; flex-direction: column; gap: 16px; min-width: 0; min-height: 0; overflow-y: auto }
+.head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap }
+.btn { border: 1px solid var(--line); background: var(--win); padding: 7px 14px; border-radius: 7px; font-weight: 500; white-space: nowrap }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink) }
+.btn.quiet { border-color: transparent; color: var(--muted); padding-inline: 10px }
+.btn[disabled] { opacity: .45; cursor: default }
+.head-acts { display: flex; align-items: stretch; gap: 8px }
+.btn.icon { display: inline-flex; align-items: center; padding-inline: 9px }
+.btn.icon svg { display: block }
+.btn.icon.busy svg { animation: turn 1s linear infinite }
+@keyframes turn { to { transform: rotate(360deg) } }
+
+.list { display: flex; flex-direction: column }
+.row { position: relative; display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 4px; border-bottom: 1px solid var(--line); border-radius: 7px }
+.row:last-child { border-bottom: 0 }
+.row.file-drop-target-active { background: var(--accent-soft); outline: 2px dashed var(--accent); outline-offset: -2px }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok) }
+.dot.off { background: transparent; border: 1.5px solid var(--off) }
+.dot.checking { background: var(--off); animation: pulse 1.6s ease-in-out infinite }
+.name { font-weight: 600; overflow-wrap: anywhere }
+.name .own { color: var(--muted); font-weight: 400; margin-left: 6px }
+.sub { color: var(--muted); font-size: 13px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
+.tag { font: 500 11px var(--body); letter-spacing: .06em; text-transform: uppercase; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted) }
+.tag.paired { background: var(--accent-soft); border-color: transparent; color: var(--accent) }
+.tag.warn { border-color: var(--warn); color: var(--warn) }
+.acts { display: flex; gap: 6px; align-items: center }
+/* Every device row keeps room for the menu button, so the Send buttons line up. */
+#devices .acts { display: grid; grid-template-columns: auto 38px; justify-items: start }
+.hint, .quiet { color: var(--muted) }
+.hint { font-size: 13px }
+.empty { color: var(--muted); padding: 28px 4px; max-width: 52ch }
+
+.menu { position: absolute; right: 4px; top: calc(100% - 8px); z-index: 5; background: var(--win); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 4px; display: flex; flex-direction: column; min-width: 230px }
+.menu button { border: 0; background: transparent; text-align: left; padding: 8px 10px; border-radius: 5px }
+.menu button:hover { background: var(--side) }
+.menu .danger { color: var(--bad) }
+
+.docks { margin-top: auto; display: flex; flex-direction: column; gap: 8px }
+.dock { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px }
+.dock.failed { border-color: var(--bad) }
+.blocked { border: 1px solid var(--warn); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px }
+.blocked b { font-weight: 600 }
+.blocked p { color: var(--muted); font-size: 14px }
+.blocked .foot { justify-content: flex-start }
+.blocked.news { border-color: var(--line) }
+.blocked.gone { border-color: var(--bad) }
+.blocked.news b::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 8px }
+.dock .top { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center }
+.dock .top b { min-width: 0; overflow-wrap: anywhere; font-weight: 600 }
+.bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden }
+.bar i { display: block; height: 100%; background: var(--accent); transition: width .15s linear }
+.bar.waiting i { width: 30%; animation: slide 1.4s ease-in-out infinite alternate }
+@keyframes slide { from { margin-left: 0 } to { margin-left: 70% } }
+.nums { font: 400 13px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; display: flex; gap: 14px; flex-wrap: wrap }
+.nums span:first-child { overflow-wrap: anywhere; min-width: 0 }
+.chip { font-size: 12px; font-weight: 600; color: var(--warn); border: 1px solid currentColor; border-radius: 999px; padding: 0 8px; white-space: nowrap }
+.chip.direct { color: var(--ok) }
+
+.scrim { position: absolute; inset: 0; background: var(--scrim); display: grid; place-items: center; padding: 16px; z-index: 10 }
+.dialog { background: var(--win); border: 1px solid var(--line); border-radius: 10px; padding: 22px; width: min(430px, 100%); max-height: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; box-shadow: var(--shadow) }
+.dialog:focus { outline: none }
+.dialog h2 { font-size: 19px; text-wrap: balance; overflow-wrap: anywhere }
+.pane { display: flex; flex-direction: column; gap: 12px }
+.files { border: 1px solid var(--line); border-radius: 7px; padding: 4px 12px; font-size: 14px; max-height: 190px; overflow-y: auto }
+.files div { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line) }
+.files div:last-child { border-bottom: 0 }
+.files span:first-child { overflow-wrap: anywhere; min-width: 0 }
+.files span:last-child { font: 400 13px var(--mono); color: var(--muted); white-space: nowrap }
+.check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; color: var(--muted) }
+.foot { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line) }
+.tabs button { border: 0; background: transparent; padding: 6px 10px; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent) }
+/* A QR code is always dark on white, whatever the theme, so cameras can read it. */
+.qr { align-self: center; width: 200px; height: 200px; padding: 10px; border-radius: 7px; background: #FFFFFF; border: 1px solid var(--line) }
+.qr svg { display: block; width: 100%; height: 100% }
+.code { align-self: center; font: 700 46px/1 var(--display); letter-spacing: .14em; margin-right: -.14em; font-variant-numeric: tabular-nums; padding: 6px 0; user-select: text; -webkit-user-select: text }
+.link { font: 400 12px/1.5 var(--mono); background: var(--side); border-radius: 7px; padding: 10px 12px; overflow-wrap: anywhere; color: var(--muted); max-height: 5.4em; overflow-y: auto; user-select: text; -webkit-user-select: text; cursor: text }
+.field { display: flex; flex-direction: column; gap: 6px }
+.field label { font-size: 13px; font-weight: 600 }
+.field .line { display: flex; gap: 8px; flex-wrap: wrap }
+.field label.check { display: flex; align-items: center; gap: 8px }
+.field label.check input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0 }
+input[type="text"] { font: inherit; color: var(--ink); background: var(--win); border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; flex: 1 1 180px; min-width: 0; user-select: text; -webkit-user-select: text }
+.wait { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 14px }
+.wait.problem { color: var(--bad) }
+.wait.problem .pulse { display: none }
+.pulse { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1.6s ease-in-out infinite }
+@keyframes pulse { 50% { opacity: .25 } }
+
+.toast { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 20; background: var(--ink); color: var(--win); padding: 9px 16px; border-radius: 8px; box-shadow: var(--shadow); max-width: min(520px, calc(100% - 32px)); font-size: 14px }
+
+@media (prefers-reduced-motion: reduce) { .pulse, .dot.checking, .bar.waiting i, .btn.icon.busy svg { animation: none } .bar i { transition: none } }
+@media (max-width: 640px) {
+  .win { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) }
+  .side { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px }
+  .nav { flex-direction: row; flex-wrap: wrap }
+  .me { display: none }
+  .main { padding: 18px 16px }
+  .row { grid-template-columns: 10px minmax(0, 1fr) }
+  .acts { grid-column: 2 }
+}

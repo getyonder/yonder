@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8"><title>direct tests</title>
+<!-- The page of run.sh: it runs the test program and posts what it printed. -->
+<script src="wasm_exec.js"></script>
+<script>
+let out = '';
+const dec = new TextDecoder();
+globalThis.fs.writeSync = (fd, buf) => { out += dec.decode(buf); return buf.length; };
+const go = new Go();
+go.argv = ['direct.test', '-test.v', ...new URLSearchParams(location.search).getAll('arg')];
+go.exit = code => { out += '\nEXIT ' + code + '\n'; fetch('/done', {method: 'POST', body: out}); };
+WebAssembly.instantiateStreaming(fetch('direct.test.wasm'), go.importObject).then(r => go.run(r.instance))
+  .catch(e => fetch('/done', {method: 'POST', body: out + '\nERROR ' + e}));
+</script>

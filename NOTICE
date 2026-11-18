@@ -1,0 +1,8 @@
+Yonder
+Copyright 2026 The Yonder Authors
+
+Yonder includes the fonts Bricolage Grotesque and Figtree, each under the
+SIL Open Font License 1.1. Their licence texts are in
+cmd/yonder/frontend/fonts/.
+
+Yonder speaks the LocalSend protocol and is not affiliated with LocalSend.

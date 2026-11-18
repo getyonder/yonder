@@ -1,0 +1,68 @@
+/* Yonder as a website. app.css draws the app's parts in the app's colours
+   and fonts; this lays them out as a web page that scrolls: a header across
+   the top and one column of content, down to a phone's width, where the
+   header's links move to a bar at the bottom. It takes the place of the
+   desktop window's (empty) shell.css, so nothing here reaches the window. */
+
+/* What only the desktop app can do. */
+.desk { display: none !important }
+/* Dropping files needs a mouse. */
+@media (hover: none) { #drophint { display: none !important } }
+
+html, body { height: auto; min-height: 100% }
+body { overflow: visible; background: var(--side) }
+.win { display: block; height: auto; min-height: 100dvh }
+
+/* The sidebar is the site's header. It and the column under it are as wide
+   as the homepage (site.css: 1080px less 20px each side), so the header
+   does not move between the two. */
+.side { position: sticky; top: 0; z-index: 8; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 28px; padding: 12px max(20px, calc((100% - 1040px) / 2)); background: var(--win); border-bottom: 1px solid var(--line) }
+.mark { padding: 0; color: var(--ink); text-decoration: none }
+.nav { flex-direction: row; flex-wrap: nowrap; gap: 4px }
+.nav button { padding: 8px 14px; gap: 8px }
+.nav button[aria-current="page"] { background: var(--accent-soft); color: var(--accent) }
+.me { display: flex; margin: 0 0 0 auto; padding: 0; border: 0; gap: 0; text-align: right; min-width: 0; max-width: min(340px, 46%); font-size: 12px; line-height: 1.35 }
+.me span:first-child { display: none }
+
+.main { width: min(1040px, calc(100% - 40px)); min-height: min(520px, calc(100dvh - 130px)); margin: 28px auto; padding: 26px 28px; overflow: visible; background: var(--win); border: 1px solid var(--line); border-radius: 14px }
+
+/* The page scrolls, so what sits over it is fixed to the screen. */
+.scrim, .toast { position: fixed }
+.dialog { max-height: calc(100dvh - 32px) }
+
+/* Under 16px, a phone zooms in on a box when it is tapped. */
+input[type="text"] { font-size: 16px }
+/* Room for a finger. */
+@media (pointer: coarse) {
+  .btn, .tabs button, .menu button, input[type="text"] { min-height: 44px }
+  .field label.check input { width: 22px; height: 22px }
+}
+
+/* The cover over the page while Yonder starts. It is here and not made by
+   bridge.js so that it is there the first time the page is drawn; otherwise
+   the empty page shows for a moment before it. bridge.js sets .ready. */
+html:not(.ready) body::before { content: 'Starting Yonder…' }
+.notice, html:not(.ready) body::before { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 24px; text-align: center; background: var(--win); color: var(--muted) }
+
+@media (max-width: 640px) {
+  body { background: var(--win) }
+  .side { gap: 12px; padding: 10px 20px }
+  .me b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+  .nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; gap: 4px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); background: var(--win); border-top: 1px solid var(--line) }
+  .nav button { flex: 1; justify-content: center; min-height: 48px }
+
+  /* The bottom padding keeps the last of the page clear of the bar. */
+  .main { width: auto; min-height: calc(100dvh - 62px); margin: 0; padding: 18px 20px calc(84px + env(safe-area-inset-bottom)); border: 0; border-radius: 0 }
+  .row { padding: 14px 0 }
+  #devices .acts { grid-template-columns: minmax(0, 1fr) 44px; justify-items: stretch }
+  .acts .btn { min-height: 44px }
+  .menu { left: 0; right: 0; min-width: 0 }
+  .docks { position: sticky; bottom: calc(72px + env(safe-area-inset-bottom)) }
+  .dock { background: var(--win); box-shadow: var(--shadow) }
+
+  /* Dialogs come up from the bottom, where a thumb is. */
+  .scrim { place-items: end stretch; padding: 0 }
+  .dialog { width: 100%; max-height: 92dvh; padding: 22px 16px calc(18px + env(safe-area-inset-bottom)); border-width: 1px 0 0; border-radius: 16px 16px 0 0 }
+  .foot .btn { flex: 1; min-height: 46px }
+  .toast { bottom: calc(76px + env(safe-area-inset-bottom)); width: max-content }
+}

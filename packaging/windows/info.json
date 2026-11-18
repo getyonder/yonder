@@ -1,0 +1,15 @@
+{
+	"fixed": {
+		"file_version": "VERSION",
+		"product_version": "VERSION"
+	},
+	"info": {
+		"0409": {
+			"FileVersion": "VERSION",
+			"ProductVersion": "VERSION",
+			"FileDescription": "Yonder",
+			"ProductName": "Yonder",
+			"Comments": "Send files between devices, on the same network or not"
+		}
+	}
+}

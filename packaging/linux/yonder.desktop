@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Yonder
+Comment=Send files between devices, on the same network or not
+Exec=yonder
+Icon=yonder
+Terminal=false
+Categories=Network;FileTransfer;
+StartupWMClass=yonder

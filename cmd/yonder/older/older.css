@@ -1,0 +1,4 @@
+/* The small window of a newer Yonder that found an older one running: the
+   main window's mark and its warning card, and nothing else. */
+body { display: flex; flex-direction: column; gap: 16px; padding: 20px }
+.mark { padding: 0 }

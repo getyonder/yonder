@@ -1,0 +1,16 @@
+{
+  "Regions": {
+    "1": {
+      "RegionID": 1,
+      "RegionCode": "main",
+      "RegionName": "Yonder's main relay",
+      "Nodes": [
+        {
+          "Name": "1",
+          "RegionID": 1,
+          "HostName": "relay.getyonder.org"
+        }
+      ]
+    }
+  }
+}
