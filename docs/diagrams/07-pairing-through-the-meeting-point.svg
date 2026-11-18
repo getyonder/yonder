@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 666" width="1120" height="666" role="img" aria-label="Pairing through the meeting point: a key agreement with a commitment and a six-digit code" font-family="Figtree, Inter, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+<title>Pairing through the meeting point: a key agreement with a commitment and a six-digit code</title>
+<rect width="1120" height="666" rx="12" fill="#f6f7fb"/>
+<line x1="230" y1="66" x2="230" y2="644" stroke="#8a93a8" stroke-width="1.2" stroke-dasharray="3 4"/>
+<line x1="560" y1="66" x2="560" y2="644" stroke="#8a93a8" stroke-width="1.2" stroke-dasharray="3 4"/>
+<line x1="890" y1="66" x2="890" y2="644" stroke="#8a93a8" stroke-width="1.2" stroke-dasharray="3 4"/>
+<rect x="120" y="18" width="220" height="50" rx="8" fill="#ffffff" stroke="#1f2433" stroke-width="1.5"/>
+<text x="230.0" y="40.5" font-size="13.5" text-anchor="middle" fill="#1f2433" font-weight="650">Device A</text>
+<text x="230.0" y="56.5" font-size="11.5" text-anchor="middle" fill="#5b6478" font-weight="400">asks to pair</text>
+<rect x="450" y="18" width="220" height="50" rx="8" fill="#ffffff" stroke="#1f2433" stroke-width="1.5"/>
+<text x="560.0" y="40.5" font-size="13.5" text-anchor="middle" fill="#1f2433" font-weight="650">Meeting point</text>
+<text x="560.0" y="56.5" font-size="11.5" text-anchor="middle" fill="#5b6478" font-weight="400">passes messages; sees no secret</text>
+<rect x="780" y="18" width="220" height="50" rx="8" fill="#ffffff" stroke="#1f2433" stroke-width="1.5"/>
+<text x="890.0" y="40.5" font-size="13.5" text-anchor="middle" fill="#1f2433" font-weight="650">Device B</text>
+<text x="890.0" y="56.5" font-size="11.5" text-anchor="middle" fill="#5b6478" font-weight="400">answers</text>
+<polyline points="230,123 560,123" fill="none" stroke="#5b6478" stroke-width="1.8" stroke-dasharray="6 4" stroke-linejoin="round"/>
+<polygon points="560,123 550.0,127.5 550.0,118.5" fill="#5b6478"/>
+<rect x="338.6" y="100" width="112.80000000000001" height="19" fill="#f6f7fb"/>
+<text x="395.0" y="115" font-size="12" text-anchor="middle" fill="#5b6478" font-weight="500">name, kind, tag</text>
+<polyline points="890,164 560,164" fill="none" stroke="#5b6478" stroke-width="1.8" stroke-dasharray="6 4" stroke-linejoin="round"/>
+<polygon points="560,164 570.0,159.5 570.0,168.5" fill="#5b6478"/>
+<rect x="668.6" y="141" width="112.80000000000001" height="19" fill="#f6f7fb"/>
+<text x="725.0" y="156" font-size="12" text-anchor="middle" fill="#5b6478" font-weight="500">name, kind, tag</text>
+<rect x="425.03999999999996" y="182" width="269.9200000000001" height="44" rx="6" fill="#ffffff" stroke="#8a93a8" stroke-width="1.2"/>
+<text x="560.0" y="201" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">Group the devices by public address.</text>
+<text x="560.0" y="216" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">Tell each member about the others.</text>
+<rect x="16" y="244" width="1088" height="28" rx="6" fill="#eceff6" stroke="none" stroke-width="1.5"/>
+<text x="560.0" y="263" font-size="12.5" text-anchor="middle" fill="#1f2433" font-weight="650">The user of A selects "Pair" on device B</text>
+<polyline points="230,311 890,311" fill="none" stroke="#5b6478" stroke-width="1.8" stroke-dasharray="6 4" stroke-linejoin="round"/>
+<polygon points="890,311 880.0,315.5 880.0,306.5" fill="#5b6478"/>
+<circle cx="560" cy="311" r="5" fill="#f6f7fb" stroke="#5b6478" stroke-width="1.8"/>
+<rect x="247.88" y="288" width="294.24" height="19" fill="#f6f7fb"/>
+<text x="395.0" y="303" font-size="12" text-anchor="middle" fill="#5b6478" font-weight="500">1. commitment: hash of the public key of A</text>
+<polyline points="890,352 230,352" fill="none" stroke="#5b6478" stroke-width="1.8" stroke-dasharray="6 4" stroke-linejoin="round"/>
+<polygon points="230,352 240.0,347.5 240.0,356.5" fill="#5b6478"/>
+<circle cx="560" cy="352" r="5" fill="#f6f7fb" stroke="#5b6478" stroke-width="1.8"/>
+<rect x="658.52" y="329" width="132.96" height="19" fill="#f6f7fb"/>
+<text x="725.0" y="344" font-size="12" text-anchor="middle" fill="#5b6478" font-weight="500">2. public key of B</text>
+<polyline points="230,393 890,393" fill="none" stroke="#5b6478" stroke-width="1.8" stroke-dasharray="6 4" stroke-linejoin="round"/>
+<polygon points="890,393 880.0,397.5 880.0,388.5" fill="#5b6478"/>
+<circle cx="560" cy="393" r="5" fill="#f6f7fb" stroke="#5b6478" stroke-width="1.8"/>
+<rect x="328.52" y="370" width="132.96" height="19" fill="#f6f7fb"/>
+<text x="395.0" y="385" font-size="12" text-anchor="middle" fill="#5b6478" font-weight="500">3. public key of A</text>
+<rect x="708.0" y="411" width="364.0" height="29" rx="6" fill="#ffffff" stroke="#8a93a8" stroke-width="1.2"/>
+<text x="890.0" y="430" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">Make sure that the key agrees with the commitment.</text>
+<rect x="110" y="456" width="900" height="44" rx="6" fill="#ffffff" stroke="#8a93a8" stroke-width="1.2"/>
+<text x="560.0" y="475" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">Each device calculates the shared secret (X25519) and shows a six-digit code.</text>
+<text x="560.0" y="490" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">The two owners compare the codes. Each owner confirms.</text>
+<rect x="111.83999999999999" y="516" width="236.32000000000005" height="29" rx="6" fill="#ffffff" stroke="#8a93a8" stroke-width="1.2"/>
+<text x="230.0" y="535" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">Make a pairing link (figure 6).</text>
+<polyline points="230,584 890,584" fill="none" stroke="#5b6478" stroke-width="1.8" stroke-dasharray="6 4" stroke-linejoin="round"/>
+<polygon points="890,584 880.0,588.5 880.0,579.5" fill="#5b6478"/>
+<circle cx="560" cy="584" r="5" fill="#f6f7fb" stroke="#5b6478" stroke-width="1.8"/>
+<rect x="268.03999999999996" y="561" width="253.92000000000002" height="19" fill="#f6f7fb"/>
+<text x="395.0" y="576" font-size="12" text-anchor="middle" fill="#5b6478" font-weight="500">4. the link, encrypted (AES-256-GCM)</text>
+<rect x="16" y="604" width="1088" height="28" rx="6" fill="#eceff6" stroke="none" stroke-width="1.5"/>
+<text x="560.0" y="623" font-size="12.5" text-anchor="middle" fill="#1f2433" font-weight="650">Device B uses the link: the procedure continues as in figure 6, through the tunnel</text>
+</svg>

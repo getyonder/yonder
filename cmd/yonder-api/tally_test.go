@@ -25,8 +25,8 @@ import (
 // wait is the longest any step of these tests may take; nothing sleeps.
 const wait = 10 * time.Second
 
-// countries is a made-up country list, in the form of DB-IP's file.
-const countries = "203.0.113.0,203.0.113.255,NZ\n2001:db8::,2001:db8::ffff,JP\n"
+// cities is a made-up list of places, in the form of DB-IP's file.
+const cities = "203.0.113.0,203.0.113.255,OC,NZ,Auckland,Auckland,-36.8485,174.763\n2001:db8::,2001:db8::ffff,AS,JP,Tokyo,Tokyo,35.6895,139.692\n"
 
 // counting is a site that counts, behind a listener that takes each
 // visitor's address from a PROXY line as on Yonder's server, so a test can
@@ -40,12 +40,16 @@ type counting struct {
 
 func newCounting(t *testing.T) *counting {
 	t.Helper()
-	list := filepath.Join(t.TempDir(), "countries.csv")
-	if err := os.WriteFile(list, []byte(countries), 0o644); err != nil {
+	list := filepath.Join(t.TempDir(), "city.csv")
+	if err := os.WriteFile(list, []byte(cities), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	places := filepath.Join(t.TempDir(), "places")
+	if _, err := tally.BuildPlaces(list, places); err != nil {
 		t.Fatal(err)
 	}
 	c := &counting{dir: filepath.Join(t.TempDir(), "tally")}
-	c.counts = tally.Open(c.dir, tally.LoadCountries(list))
+	c.counts = tally.Open(c.dir, tally.LoadPlaces(places))
 	c.testSite = newCountingSite(t, c.counts)
 	srv := httptest.NewUnstartedServer(c.handler)
 	srv.Listener = proxyline.Listen(srv.Listener)
@@ -115,8 +119,15 @@ func (c *counting) totals() ([]byte, map[string]uint64) {
 	if err != nil {
 		c.t.Fatal(err)
 	}
+	return b, c.read(false)
+}
+
+// read is what the read command gives: the totals, each as "event country
+// version system", or the counts by state, each as "event country region".
+func (c *counting) read(regions bool) map[string]uint64 {
+	c.t.Helper()
 	var lines bytes.Buffer
-	if err := tally.Read(c.dir, "2000-01-01", &lines); err != nil {
+	if err := tally.Read(c.dir, "2000-01-01", regions, &lines); err != nil {
 		c.t.Fatal(err)
 	}
 	out := map[string]uint64{}
@@ -125,9 +136,13 @@ func (c *counting) totals() ([]byte, map[string]uint64) {
 		if err := dec.Decode(&r); err != nil {
 			c.t.Fatal(err)
 		}
-		out[strings.TrimSpace(fmt.Sprintf("%s %s %s %s", r.Event, r.Country, r.Version, r.System))] += r.Count
+		if regions {
+			out[fmt.Sprintf("%s %s %s", r.Event, r.Country, r.Region)] += r.Count
+		} else {
+			out[strings.TrimSpace(fmt.Sprintf("%s %s %s %s", r.Event, r.Country, r.Version, r.System))] += r.Count
+		}
 	}
-	return b, out
+	return out
 }
 
 // The requests that are counted, each with the fields its event has, and
@@ -187,9 +202,15 @@ func TestCounts(t *testing.T) {
 			t.Fatalf("counted %v, want %v", got, want)
 		}
 	}
-	for _, a := range []string{nz, jp, nowhere, "203.0.113", "2001:db8", "198.51.100", "51234"} {
+	// By state the checks are counted once more, with nothing of the app.
+	states := c.read(true)
+	if len(states) != 2 || states["update-check NZ Auckland"] != 3 || states["update-check JP Tokyo"] != 1 {
+		t.Fatalf("counted by state %v, want 3 in Auckland and 1 in Tokyo", states)
+	}
+	// No address is kept, and nothing finer than a state.
+	for _, a := range []string{nz, jp, nowhere, "203.0.113", "2001:db8", "198.51.100", "51234", "36.8485", "174.763", "139.692"} {
 		if strings.Contains(string(file), a) {
-			t.Fatalf("the totals hold the address %s:\n%s", a, file)
+			t.Fatalf("the totals hold %s:\n%s", a, file)
 		}
 	}
 }

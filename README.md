@@ -10,6 +10,8 @@ Website and web app: <https://getyonder.org>
 - On the same network, devices find each other and exchange files with the LocalSend protocol.
 - Pairing is done once per pair of devices, with a link, a QR code or a six-digit code.
 
+The whole design, with figures, is in [docs/design.md](docs/design.md) (also as a [PDF](docs/design.pdf)).
+
 ## Layout
 
 - `cmd/yonder`: the desktop app (a [Wails](https://wails.io) window; also usable from the terminal, see the top of `cmd/yonder/main.go`)

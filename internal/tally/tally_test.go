@@ -8,7 +8,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
-	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -19,16 +19,33 @@ import (
 	"yonder/internal/tally/agent"
 )
 
-// list is a made-up country list, in the form of DB-IP's file.
-const list = `192.0.2.0,192.0.2.255,NZ
-198.51.100.0,198.51.100.127,DE
+// list is a made-up list of places, in the form of DB-IP's file. Its first
+// two lines are one place.
+const list = `192.0.2.0,192.0.2.127,OC,NZ,Auckland,Auckland,-36.8485,174.763
+192.0.2.128,192.0.2.255,OC,NZ,Auckland,"Manukau City",-36.9928,174.88
+198.51.100.0,198.51.100.127,EU,DE,Bavaria,Munich,48.1351,11.582
 not,a,line
-203.0.113.5,203.0.113.5,FR
-2001:db8::,2001:db8:0:ffff:ffff:ffff:ffff:ffff,JP
-2001:db8:2::,2001:db8:2::ff,BR
+203.0.113.5,203.0.113.5,EU,FR,"Provence-Alpes-Côte d'Azur",Nice,43.7102,7.26195
+203.0.113.9,203.0.113.9,ZZ,ZZ,,,0,0
+2001:db8::,2001:db8:0:ffff:ffff:ffff:ffff:ffff,AS,JP,Tokyo,Tokyo,35.6895,139.692
+2001:db8:2::,2001:db8:2::ff,SA,BR,,,-10,-55
 `
 
-// server is a made-up machine: a folder for the totals, a country list, a
+// build makes the small file of places from a list, as the monthly run does.
+func build(t *testing.T, list, out string) PlacesReport {
+	t.Helper()
+	csv := filepath.Join(t.TempDir(), "city.csv")
+	if err := os.WriteFile(csv, []byte(list), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := BuildPlaces(csv, out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rep
+}
+
+// server is a made-up machine: a folder for the totals, a list of places, a
 // clock to move, and the tally using them.
 type server struct {
 	t     *testing.T
@@ -40,18 +57,16 @@ type server struct {
 
 func newServer(t *testing.T) *server {
 	t.Helper()
-	s := &server{t: t, dir: filepath.Join(t.TempDir(), "tally"), list: filepath.Join(t.TempDir(), "countries.csv"),
+	s := &server{t: t, dir: filepath.Join(t.TempDir(), "tally"), list: filepath.Join(t.TempDir(), "places"),
 		clock: time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)}
-	if err := os.WriteFile(s.list, []byte(list), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	build(t, list, s.list)
 	s.restart()
 	return s
 }
 
 // restart is the program starting again: what was not written is gone.
 func (s *server) restart() {
-	s.Tally = open(s.dir, LoadCountries(s.list), func() time.Time { return s.clock })
+	s.Tally = open(s.dir, LoadPlaces(s.list), func() time.Time { return s.clock })
 }
 
 func (s *server) flush() {
@@ -61,11 +76,29 @@ func (s *server) flush() {
 	}
 }
 
-// read is what Read gives from a day on.
-func (s *server) read(since string) []Record {
+// read is what Read gives of the totals from a day on.
+func (s *server) read(since string) []Record { return s.readTable(since, false) }
+
+// regions is what the database holds of a day by state, each as "event
+// country region" with its count.
+func (s *server) regions(day string) map[string]uint64 {
+	s.t.Helper()
+	out := map[string]uint64{}
+	for _, r := range s.readTable(day, true) {
+		if r.Day == day {
+			if !r.Valid() || r.Region == "" {
+				s.t.Errorf("the record by state %+v is not one", r)
+			}
+			out[fmt.Sprintf("%s %s %s", r.Event, r.Country, r.Region)] += r.Count
+		}
+	}
+	return out
+}
+
+func (s *server) readTable(since string, regions bool) []Record {
 	s.t.Helper()
 	var b bytes.Buffer
-	if err := Read(s.dir, since, &b); err != nil {
+	if err := Read(s.dir, since, regions, &b); err != nil {
 		s.t.Fatal(err)
 	}
 	var records []Record
@@ -86,6 +119,9 @@ func (s *server) records(day string) map[string]uint64 {
 	out := map[string]uint64{}
 	for _, r := range s.read(day) {
 		if r.Day == day {
+			if !r.Valid() || r.Region != "" {
+				s.t.Errorf("the total %+v is not one", r)
+			}
 			out[strings.TrimSpace(fmt.Sprintf("%s %s %s %s", r.Event, r.Country, r.Version, r.System))] += r.Count
 		}
 	}
@@ -147,6 +183,24 @@ func TestTotals(t *testing.T) {
 		"nearby-pairing-started":         2,
 		"nearby-pairing-completed":       1,
 	})
+	// By state: only the events that have a country, only where the list
+	// names a state, and nothing of the app.
+	same(t, s.regions("2026-11-17"), map[string]uint64{
+		"web-app NZ Auckland":      1,
+		"web-app DE Bavaria":       1,
+		"web-app JP Tokyo":         1,
+		"update-check NZ Auckland": 4,
+		"update-check DE Bavaria":  1,
+		"update-check JP Tokyo":    1,
+	})
+	s.Add(WebApp, addr("2001:db8:2::1"), "", "") // a country with no state
+	s.flush()
+	if got := s.records("2026-11-17")["web-app BR"]; got != 1 {
+		t.Fatalf("web-app BR is %d, want 1", got)
+	}
+	if got := s.regions("2026-11-17"); len(got) != 6 {
+		t.Fatalf("a country with no state is counted by state: %v", got)
+	}
 	files, err := os.ReadDir(s.dir)
 	if err != nil {
 		t.Fatal(err)
@@ -306,11 +360,21 @@ func TestRead(t *testing.T) {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 	for _, since := range []string{"", "today", "2026-11-18; rm", "2026-11-18 ", "2026-13-01", "2026-1-1", "' OR 1=1 --"} {
-		if err := Read(s.dir, since, &bytes.Buffer{}); err == nil {
-			t.Errorf("Read took %q for a day", since)
+		for _, regions := range []bool{false, true} {
+			if err := Read(s.dir, since, regions, &bytes.Buffer{}); err == nil {
+				t.Errorf("Read took %q for a day", since)
+			}
 		}
 	}
-	if err := Read(filepath.Join(t.TempDir(), "nothing"), "2026-11-18", &bytes.Buffer{}); err == nil {
+	got = nil
+	for _, r := range s.readTable("2026-11-18", true) {
+		got = append(got, fmt.Sprintf("%s %s %s %s %d", r.Day, r.Event, r.Country, r.Region, r.Count))
+	}
+	want = []string{"2026-11-18 web-app NZ Auckland 1", "2026-11-19 web-app NZ Auckland 1"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("by state: got %q, want %q", got, want)
+	}
+	if err := Read(filepath.Join(t.TempDir(), "nothing"), "2026-11-18", false, &bytes.Buffer{}); err == nil {
 		t.Error("Read made a database where there was none")
 	}
 
@@ -333,7 +397,7 @@ func TestRead(t *testing.T) {
 		}
 	})
 	for range 50 {
-		if err := Read(s.dir, "2026-11-01", &bytes.Buffer{}); err != nil {
+		if err := Read(s.dir, "2026-11-01", false, &bytes.Buffer{}); err != nil {
 			t.Errorf("a read beside the writer: %v", err)
 		}
 	}
@@ -452,6 +516,62 @@ func TestRecordsAreCapped(t *testing.T) {
 	}
 }
 
+// The records by state of a day have a limit too; past it a new state is in
+// the totals only, and a state that is known is still counted.
+func TestRegionsAreCapped(t *testing.T) {
+	s := newServer(t)
+	var list strings.Builder
+	const n = maxRegions + 10
+	for i := range n {
+		fmt.Fprintf(&list, "10.%d.%d.0,10.%d.%d.255,OC,NZ,State %d,City,0,0\n", i/256, i%256, i/256, i%256, i)
+	}
+	build(t, list.String(), s.list)
+	later := time.Now().Add(time.Hour)
+	os.Chtimes(s.list, later, later)
+	s.places.Refresh()
+	for i := range n {
+		s.Add(WebApp, netip.AddrFrom4([4]byte{10, byte(i / 256), byte(i % 256), 1}), "", "")
+	}
+	s.Add(WebApp, addr("10.0.0.1"), "", "")
+	s.flush()
+	if got := s.records("2026-11-17")["web-app NZ"]; got != n+1 {
+		t.Fatalf("web-app NZ is %d, want %d", got, n+1)
+	}
+	regions := s.regions("2026-11-17")
+	if len(regions) != maxRegions {
+		t.Fatalf("the day holds %d records by state, want %d", len(regions), maxRegions)
+	}
+	if got := regions["web-app NZ State 0"]; got != 2 {
+		t.Fatalf("a state that was known is counted %d times past the limit, want 2", got)
+	}
+}
+
+// A record from another machine is kept only in the shapes Add makes.
+func TestValid(t *testing.T) {
+	ok := Record{Day: "2026-11-17", Event: UpdateCheck, Country: "NZ", Version: "0.1.41", System: "linux", Count: 1}
+	state := Record{Day: "2026-11-17", Event: WebApp, Country: "NZ", Region: "Auckland", Count: 1}
+	if !ok.Valid() || !state.Valid() {
+		t.Fatal("a record that Add makes is not taken")
+	}
+	for name, change := range map[string]func(*Record){
+		"a state with a version":       func(r *Record) { r.Version = "0.1.41" },
+		"a state with a system":        func(r *Record) { r.System = "linux" },
+		"a state with no country":      func(r *Record) { r.Country = "" },
+		"a state of a pairing":         func(r *Record) { r.Event = RoomOpened },
+		"a state with a line break":    func(r *Record) { r.Region = "Auck\nland" },
+		"a state of 65 bytes":          func(r *Record) { r.Region = strings.Repeat("a", maxRegion+1) },
+		"a state that is not UTF-8":    func(r *Record) { r.Region = "Auck\xffland" },
+		"a country in small letters":   func(r *Record) { r.Country = "nz" },
+		"a day that is not one":        func(r *Record) { r.Day = "2026-13-01" },
+		"an event that is not counted": func(r *Record) { r.Event = "made-up" },
+	} {
+		r := state
+		if change(&r); r.Valid() {
+			t.Errorf("%s is taken: %+v", name, r)
+		}
+	}
+}
+
 // Counting from many goroutines at once loses nothing (and, under -race,
 // shares nothing unguarded), with flushes in between.
 func TestManyAtOnce(t *testing.T) {
@@ -479,128 +599,257 @@ func TestNil(t *testing.T) {
 	}
 }
 
-func TestCountries(t *testing.T) {
+func TestPlaces(t *testing.T) {
 	s := newServer(t)
-	c := s.countries
-	for a, want := range map[string]string{
-		"192.0.2.0":                              "NZ", // the first address of a range
-		"192.0.2.99":                             "NZ",
-		"192.0.2.255":                            "NZ", // and the last
-		"192.0.1.255":                            "",   // one before
-		"192.0.3.0":                              "",   // one after
-		"198.51.100.127":                         "DE",
-		"198.51.100.128":                         "",
-		"203.0.113.5":                            "FR", // a range of one address
-		"203.0.113.4":                            "",
-		"203.0.113.6":                            "",
-		"0.0.0.0":                                "",
-		"255.255.255.255":                        "",
-		"::ffff:192.0.2.9":                       "NZ", // an IPv4 address written as IPv6
-		"2001:db8::":                             "JP",
-		"2001:db8::1":                            "JP",
-		"2001:db8:0:ffff:ffff:ffff:ffff:ffff":    "JP",
-		"2001:db8:1::":                           "",
-		"2001:db7:ffff:ffff:ffff:ffff:ffff:ffff": "",
-		"2001:db8:2::ff":                         "BR",
-		"2001:db8:2::100":                        "",
-		"::1":                                    "",
+	p := s.places
+	for a, want := range map[string]place{
+		"192.0.2.0":                              {"NZ", "Auckland"}, // the first address of a range
+		"192.0.2.99":                             {"NZ", "Auckland"},
+		"192.0.2.128":                            {"NZ", "Auckland"}, // the next line, the same place
+		"192.0.2.255":                            {"NZ", "Auckland"}, // and the last
+		"192.0.1.255":                            {},                 // one before
+		"192.0.3.0":                              {},                 // one after
+		"198.51.100.127":                         {"DE", "Bavaria"},
+		"198.51.100.128":                         {},
+		"203.0.113.5":                            {"FR", "Provence-Alpes-Côte d'Azur"}, // a range of one address
+		"203.0.113.4":                            {},
+		"203.0.113.6":                            {},
+		"203.0.113.9":                            {}, // a range that is in no country
+		"0.0.0.0":                                {},
+		"255.255.255.255":                        {},
+		"::ffff:192.0.2.9":                       {"NZ", "Auckland"}, // an IPv4 address written as IPv6
+		"2001:db8::":                             {"JP", "Tokyo"},
+		"2001:db8::1":                            {"JP", "Tokyo"},
+		"2001:db8:0:ffff:ffff:ffff:ffff:ffff":    {"JP", "Tokyo"},
+		"2001:db8:1::":                           {},
+		"2001:db7:ffff:ffff:ffff:ffff:ffff:ffff": {},
+		"2001:db8:2::ff":                         {"BR", ""}, // a country with no state
+		"2001:db8:2::100":                        {},
+		"::1":                                    {},
+		"ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff": {},
 	} {
-		if got := c.Lookup(addr(a)); got != want {
-			t.Errorf("the country of %s is %q, want %q", a, got, want)
+		if country, region := p.Lookup(addr(a)); (place{country, region}) != want {
+			t.Errorf("the place of %s is %q %q, want %q %q", a, country, region, want.country, want.region)
 		}
 	}
-	if got := c.Lookup(none); got != "" {
-		t.Errorf("the country of no address is %q", got)
+	if country, region := p.Lookup(none); country != "" || region != "" {
+		t.Errorf("the place of no address is %q %q", country, region)
+	}
+}
+
+// What the monthly run says of a list, and that the small file holds
+// nothing finer than a state: no city, and no coordinate.
+func TestBuildPlaces(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "places")
+	rep := build(t, list, out)
+	// Entries: for IPv4 a start in no place, NZ, none, DE, none, FR, none;
+	// for IPv6 a start in no place, JP, none, BR, none.
+	want := PlacesReport{Rows: 7, Skipped: 1, Places: 5, V4: 7, V6: 5, Gaps: 6, Unnamed: 1}
+	if rep != want {
+		t.Fatalf("the report is %+v, want %+v", rep, want)
+	}
+	b, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, finer := range []string{"Manukau", "Munich", "Nice", "36.8485", "174.763", "11.582", "7.26195", "139.692"} {
+		if bytes.Contains(b, []byte(finer)) {
+			t.Errorf("the small file holds %q", finer)
+		}
+	}
+	for _, kept := range []string{"NZ\x08Auckland", "DE\x07Bavaria", "FR\x1bProvence-Alpes-Côte d'Azur"} {
+		if !bytes.Contains(b, []byte(kept)) {
+			t.Errorf("the small file does not hold %q", kept)
+		}
+	}
+}
+
+// A list that cannot be used leaves the small file as it was.
+func TestBuildPlacesBadList(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "places")
+	build(t, list, out)
+	before, _ := os.ReadFile(out)
+	for name, bad := range map[string]string{
+		"no ranges":       "nothing of use\n",
+		"out of order":    "198.51.100.0,198.51.100.127,EU,DE,Bavaria,Munich,0,0\n192.0.2.0,192.0.2.255,OC,NZ,Auckland,Auckland,0,0\n",
+		"IPv4 after IPv6": "2001:db8::,2001:db8::ffff,AS,JP,Tokyo,Tokyo,0,0\n192.0.2.0,192.0.2.255,OC,NZ,Auckland,Auckland,0,0\n",
+		"overlapping":     "192.0.2.0,192.0.2.255,OC,NZ,Auckland,Auckland,0,0\n192.0.2.255,192.0.3.9,EU,DE,Bavaria,Munich,0,0\n",
+	} {
+		csv := filepath.Join(t.TempDir(), "city.csv")
+		if err := os.WriteFile(csv, []byte(bad), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := BuildPlaces(csv, out); err == nil {
+			t.Errorf("a list with %s was taken", name)
+		}
+		if after, _ := os.ReadFile(out); !bytes.Equal(before, after) {
+			t.Errorf("a list with %s changed the small file", name)
+		}
+		if _, err := os.Stat(out + ".new"); err == nil {
+			t.Errorf("a list with %s left a half-made file", name)
+		}
 	}
 }
 
 // The list is read compressed, as DB-IP gives it.
-func TestCountriesCompressed(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "countries.csv.gz")
+func TestBuildPlacesCompressed(t *testing.T) {
+	csv := filepath.Join(t.TempDir(), "city.csv.gz")
 	var b bytes.Buffer
 	z := gzip.NewWriter(&b)
 	z.Write([]byte(list))
 	z.Close()
-	if err := os.WriteFile(file, b.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(csv, b.Bytes(), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	c := LoadCountries(file)
-	if got := c.Lookup(addr("192.0.2.9")); got != "NZ" {
-		t.Fatalf("the country of 192.0.2.9 is %q, want NZ", got)
+	out := filepath.Join(t.TempDir(), "places")
+	if _, err := BuildPlaces(csv, out); err != nil {
+		t.Fatal(err)
 	}
-	if got := c.Lookup(addr("2001:db8:2::1")); got != "BR" {
-		t.Fatalf("the country of 2001:db8:2::1 is %q, want BR", got)
+	p := LoadPlaces(out)
+	if country, region := p.Lookup(addr("192.0.2.9")); country != "NZ" || region != "Auckland" {
+		t.Fatalf("the place of 192.0.2.9 is %q %q, want NZ Auckland", country, region)
+	}
+	if country, _ := p.Lookup(addr("2001:db8:2::1")); country != "BR" {
+		t.Fatalf("the country of 2001:db8:2::1 is %q, want BR", country)
 	}
 }
 
-// Without a list, or with one that cannot be read, every country is empty
-// and counting goes on; a list that arrives later is picked up.
-func TestCountriesMissing(t *testing.T) {
-	var no *Countries
-	if got := no.Lookup(addr("192.0.2.9")); got != "" {
-		t.Fatalf("no list gave the country %q", got)
+// Without a small file, or with one that cannot be read, every place is
+// empty and counting goes on; a file that arrives later is picked up, and
+// so is the one that replaces it.
+func TestPlacesMissing(t *testing.T) {
+	var no *Places
+	if country, _ := no.Lookup(addr("192.0.2.9")); country != "" {
+		t.Fatalf("no list gave the country %q", country)
 	}
-	file := filepath.Join(t.TempDir(), "countries.csv")
-	c := LoadCountries(file)
-	if got := c.Lookup(addr("192.0.2.9")); got != "" {
-		t.Fatalf("a missing list gave the country %q", got)
+	file := filepath.Join(t.TempDir(), "places")
+	p := LoadPlaces(file)
+	if country, _ := p.Lookup(addr("192.0.2.9")); country != "" {
+		t.Fatalf("a missing list gave the country %q", country)
 	}
-	if err := os.WriteFile(file, []byte("nothing of use\n"), 0o644); err != nil {
+	whole, err := os.ReadFile(newServer(t).list)
+	if err != nil {
 		t.Fatal(err)
 	}
-	c.Refresh()
-	if got := c.Lookup(addr("192.0.2.9")); got != "" {
-		t.Fatalf("a list with no ranges gave the country %q", got)
+	// The file's time is what says it is new; set it, so the test does
+	// not lean on the clock's grain.
+	later := time.Now()
+	put := func(b []byte) {
+		t.Helper()
+		if err := os.WriteFile(file+".new", b, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		later = later.Add(time.Hour)
+		if err := os.Chtimes(file+".new", later, later); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(file+".new", file); err != nil {
+			t.Fatal(err)
+		}
+		p.Refresh()
 	}
-	tl := open(filepath.Join(t.TempDir(), "tally"), c, time.Now)
+	for name, bad := range map[string][]byte{
+		"is something else":   []byte("nothing of use\n"),
+		"is cut short":        whole[:len(whole)-1],
+		"has a byte too many": append(slices.Clone(whole), 0),
+		"names a bad country": bytes.Replace(whole, []byte("NZ\x08Auckland"), []byte("nz\x08Auckland"), 1),
+		"names a bad state":   bytes.Replace(whole, []byte("NZ\x08Auckland"), []byte("NZ\x08Auck\x00and"), 1),
+	} {
+		put(bad)
+		if country, _ := p.Lookup(addr("192.0.2.9")); country != "" {
+			t.Fatalf("a file that %s gave the country %q", name, country)
+		}
+	}
+	tl := open(filepath.Join(t.TempDir(), "tally"), p, time.Now)
 	tl.Add(WebApp, addr("192.0.2.9"), "", "")
 	if err := tl.Flush(); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(file, []byte(list), 0o644); err != nil {
-		t.Fatal(err)
+	put(whole)
+	if country, _ := p.Lookup(addr("192.0.2.9")); country != "NZ" {
+		t.Fatalf("after the list arrived the country of 192.0.2.9 is %q, want NZ", country)
 	}
-	// The file's time is what says it is new; set it, so the test does
-	// not lean on the clock's grain.
-	later := time.Now().Add(time.Hour)
-	if err := os.Chtimes(file, later, later); err != nil {
-		t.Fatal(err)
+	// The next month's list, with the address somewhere else.
+	next := filepath.Join(t.TempDir(), "places")
+	build(t, "192.0.2.0,192.0.2.255,EU,DE,Bavaria,Munich,48.1351,11.582\n", next)
+	b, _ := os.ReadFile(next)
+	put(b)
+	if country, region := p.Lookup(addr("192.0.2.9")); country != "DE" || region != "Bavaria" {
+		t.Fatalf("after the new list the place of 192.0.2.9 is %q %q, want DE Bavaria", country, region)
 	}
-	c.Refresh()
-	if got := c.Lookup(addr("192.0.2.9")); got != "NZ" {
-		t.Fatalf("after the list arrived the country of 192.0.2.9 is %q, want NZ", got)
+	// A file that cannot be read leaves the places as they were.
+	put([]byte("nothing of use\n"))
+	if country, _ := p.Lookup(addr("192.0.2.9")); country != "DE" {
+		t.Fatalf("after a bad file the country of 192.0.2.9 is %q, want DE", country)
 	}
 }
 
+// Lookups go on while the list is replaced.
+func TestPlacesReplacedWhileRead(t *testing.T) {
+	s := newServer(t)
+	p := s.places
+	whole, _ := os.ReadFile(s.list)
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+	for range 4 {
+		wg.Go(func() {
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				if country, region := p.Lookup(addr("192.0.2.9")); country != "NZ" || region != "Auckland" {
+					t.Errorf("the place of 192.0.2.9 is %q %q", country, region)
+					return
+				}
+			}
+		})
+	}
+	later := time.Now()
+	for range 50 {
+		if err := os.WriteFile(s.list+".new", whole, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		later = later.Add(time.Hour)
+		os.Chtimes(s.list+".new", later, later)
+		os.Rename(s.list+".new", s.list)
+		p.Refresh()
+	}
+	close(stop)
+	wg.Wait()
+}
+
 // The real list, for the facts a made-up one cannot show: that DB-IP's file
-// has the shape this package reads, and what holding it costs. Run it with
-// YONDER_COUNTRIES set to a downloaded dbip-country-lite-YYYY-MM.csv.gz.
-func TestRealCountryList(t *testing.T) {
-	file := os.Getenv("YONDER_COUNTRIES")
+// has the shape this package reads, whether it has gaps, and how large the
+// small file is. Run it with YONDER_CITIES set to a downloaded
+// dbip-city-lite-YYYY-MM.csv.gz.
+func TestRealCityList(t *testing.T) {
+	file := os.Getenv("YONDER_CITIES")
 	if file == "" {
-		t.Skip("YONDER_COUNTRIES is not set")
+		t.Skip("YONDER_CITIES is not set")
 	}
-	var before, after runtime.MemStats
-	runtime.GC()
-	runtime.ReadMemStats(&before)
+	out := filepath.Join(t.TempDir(), "places")
 	start := time.Now()
-	c := LoadCountries(file)
-	took := time.Since(start)
-	runtime.GC()
-	runtime.ReadMemStats(&after)
-	l := c.lists.Load()
-	if l == nil || len(l.v4) == 0 || len(l.v6) == 0 {
-		t.Fatal("the list was not read, or holds no IPv4 or no IPv6 ranges")
+	rep, err := BuildPlaces(file, out)
+	if err != nil {
+		t.Fatal(err)
 	}
-	t.Logf("%d IPv4 and %d IPv6 ranges, read in %v, %.1f MB held", len(l.v4), len(l.v6), took.Round(time.Millisecond), float64(after.HeapAlloc-before.HeapAlloc)/1e6)
-	// Addresses the list of 2026-11 puts in the United States. The list is
-	// not the truth about an address that is served from many places
-	// (it has Google's 2001:4860:4860::8888 in Canada); these two are what
-	// it says, read from its own lines.
-	for _, a := range []string{"8.8.8.8", "2606:4700:4700::1111"} {
-		if got := c.Lookup(netip.MustParseAddr(a)); got != "US" {
-			t.Errorf("%s is in %q, want US", a, got)
+	st, _ := os.Stat(out)
+	t.Logf("%v, made in %v, %.1f MB", rep, time.Since(start).Round(time.Millisecond), float64(st.Size())/1e6)
+	p := LoadPlaces(out)
+	// Addresses the list of 2026-11 puts in these places, read from its own
+	// lines. The list is not the truth about an address that is served from
+	// many places.
+	for a, want := range map[string]place{
+		"1.0.0.1":         {"AU", "Queensland"},
+		"113.186.58.9":    {"VN", "Ninh Binh"},
+		"2601:18e:c000::": {"US", "Massachusetts"},
+		"127.0.0.1":       {},
+	} {
+		if country, region := p.Lookup(netip.MustParseAddr(a)); (place{country, region}) != want {
+			t.Errorf("%s is in %q %q, want %q %q", a, country, region, want.country, want.region)
 		}
 	}
 }

@@ -72,12 +72,25 @@ func main() {
 		iface  = flag.String("usage-iface", "", "with -limit-gb: the network interface whose sent bytes are counted, such as enp1s0")
 		count  = flag.String("usage-file", "", "with -limit-gb: the file the month's count is kept in")
 		totals = flag.String("tally", "", "folder for the totals (tally.db) of the web app's starts, update checks and pairings; empty to count nothing")
-		places = flag.String("tally-countries", "", "with -tally: DB-IP's IP to Country Lite list (the .csv.gz file), for the country of a count; without it countries are left empty")
+		places = flag.String("tally-places", "", "with -tally: the small file of places that -places-build makes, for the country and the state of a count; without it they are left empty")
+		build  = flag.String("places-build", "", "make the small file of places from DB-IP's IP to City Lite list (the .csv.gz file) and stop: -places-build <list> -tally-places <small file>")
 		since  = flag.String("tally-read", "", "with -tally: write the totals of this day (2026-11-17) and every later one as JSON lines, and stop; the database is only read")
+		states = flag.Bool("tally-regions", false, "with -tally-read: write the counts by state or province in the place of the totals")
 	)
 	flag.Parse()
+	if *build != "" {
+		if *places == "" {
+			log.Fatal("-places-build needs -tally-places, the file to make")
+		}
+		rep, err := tally.BuildPlaces(*build, *places)
+		if err != nil {
+			log.Fatalf("the list of places %s cannot be used: %v", *build, err)
+		}
+		log.Printf("places: %v", rep)
+		return
+	}
 	if *since != "" {
-		if err := tally.Read(*totals, *since, os.Stdout); err != nil {
+		if err := tally.Read(*totals, *since, *states, os.Stdout); err != nil {
 			log.Fatal(err)
 		}
 		return
@@ -99,11 +112,11 @@ func main() {
 		log.Printf("no browser at the meeting point from %g GB a month; %.1f GB sent so far", *limit, float64(meter.Sent())/usage.GB)
 	}
 	if *totals != "" {
-		var countries *tally.Countries
+		var list *tally.Places
 		if *places != "" {
-			countries = tally.LoadCountries(*places)
+			list = tally.LoadPlaces(*places)
 		}
-		s.counts = tally.Open(*totals, countries)
+		s.counts = tally.Open(*totals, list)
 		// The totals are written every minute and once more when the
 		// program is told to stop.
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

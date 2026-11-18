@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 639" width="880" height="639" role="img" aria-label="Pairing by link: device A is the host and device B joins" font-family="Figtree, Inter, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+<title>Pairing by link: device A is the host and device B joins</title>
+<rect width="880" height="639" rx="12" fill="#f6f7fb"/>
+<line x1="230" y1="66" x2="230" y2="617" stroke="#8a93a8" stroke-width="1.2" stroke-dasharray="3 4"/>
+<line x1="650" y1="66" x2="650" y2="617" stroke="#8a93a8" stroke-width="1.2" stroke-dasharray="3 4"/>
+<rect x="120" y="18" width="220" height="50" rx="8" fill="#ffffff" stroke="#1f2433" stroke-width="1.5"/>
+<text x="230.0" y="40.5" font-size="13.5" text-anchor="middle" fill="#1f2433" font-weight="650">Device A</text>
+<text x="230.0" y="56.5" font-size="11.5" text-anchor="middle" fill="#5b6478" font-weight="400">the host: shows the link</text>
+<rect x="540" y="18" width="220" height="50" rx="8" fill="#ffffff" stroke="#1f2433" stroke-width="1.5"/>
+<text x="650.0" y="40.5" font-size="13.5" text-anchor="middle" fill="#1f2433" font-weight="650">Device B</text>
+<text x="650.0" y="56.5" font-size="11.5" text-anchor="middle" fill="#5b6478" font-weight="400">the joiner: opens the link</text>
+<rect x="84.95999999999998" y="100" width="290.08000000000004" height="44" rx="6" fill="#ffffff" stroke="#8a93a8" stroke-width="1.2"/>
+<text x="230.0" y="119" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">Make a temporary tunnel with a new key.</text>
+<text x="230.0" y="134" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">Its address is the one-time secret.</text>
+<polyline points="230,198 650,198" fill="none" stroke="#5b6478" stroke-width="1.8" stroke-dasharray="2 5" stroke-linejoin="round"/>
+<polygon points="650,198 640.0,202.5 640.0,193.5" fill="#5b6478"/>
+<rect x="262.64" y="160" width="354.72" height="34" fill="#f6f7fb"/>
+<text x="440.0" y="175" font-size="12" text-anchor="middle" fill="#5b6478" font-weight="500">link or QR code (the owner carries it)</text>
+<text x="440.0" y="190" font-size="12" text-anchor="middle" fill="#5b6478" font-weight="500">https://app.getyonder.org/#pair=&lt;temporary address&gt;</text>
+<polyline points="650,254 230,254" fill="none" stroke="#4f46e5" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="230,254 240.0,249.5 240.0,258.5" fill="#4f46e5"/>
+<rect x="333.2" y="216" width="213.60000000000002" height="34" fill="#f6f7fb"/>
+<text x="440.0" y="231" font-size="12" text-anchor="middle" fill="#4f46e5" font-weight="500">POST /pair: the record of B</text>
+<text x="440.0" y="246" font-size="12" text-anchor="middle" fill="#4f46e5" font-weight="500">(through the temporary tunnel)</text>
+<rect x="71.51999999999998" y="272" width="316.96000000000004" height="44" rx="6" fill="#ffffff" stroke="#8a93a8" stroke-width="1.2"/>
+<text x="230.0" y="291" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">The owner of A confirms.</text>
+<text x="230.0" y="306" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">Store the record of B. Permit the key of B.</text>
+<polyline points="230,355 650,355" fill="none" stroke="#4f46e5" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="650,355 640.0,359.5 640.0,350.5" fill="#4f46e5"/>
+<rect x="360.08" y="332" width="159.84" height="19" fill="#f6f7fb"/>
+<text x="440.0" y="347" font-size="12" text-anchor="middle" fill="#4f46e5" font-weight="500">reply: the record of A</text>
+<rect x="550.0" y="373" width="200.0" height="44" rx="6" fill="#ffffff" stroke="#8a93a8" stroke-width="1.2"/>
+<text x="650.0" y="392" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">Store the record of A.</text>
+<text x="650.0" y="407" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">Permit the key of A.</text>
+<rect x="118.55999999999999" y="433" width="222.88" height="44" rx="6" fill="#ffffff" stroke="#8a93a8" stroke-width="1.2"/>
+<text x="230.0" y="452" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">Close the temporary tunnel.</text>
+<text x="230.0" y="467" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">The link does not work again.</text>
+<rect x="16" y="495" width="848" height="28" rx="6" fill="#eceff6" stroke="none" stroke-width="1.5"/>
+<text x="440.0" y="514" font-size="12.5" text-anchor="middle" fill="#1f2433" font-weight="650">After pairing: each device uses the permanent tunnel of the other</text>
+<polyline points="650,562 230,562" fill="none" stroke="#4f46e5" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="230,562 240.0,557.5 240.0,566.5" fill="#4f46e5"/>
+<rect x="282.79999999999995" y="539" width="314.40000000000003" height="19" fill="#f6f7fb"/>
+<text x="440.0" y="554" font-size="12" text-anchor="middle" fill="#4f46e5" font-weight="500">GET /info ("are you there?", each 30 seconds)</text>
+<polyline points="230,603 650,603" fill="none" stroke="#4f46e5" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="650,603 640.0,607.5 640.0,598.5" fill="#4f46e5"/>
+<rect x="403.76" y="580" width="72.48" height="19" fill="#f6f7fb"/>
+<text x="440.0" y="595" font-size="12" text-anchor="middle" fill="#4f46e5" font-weight="500">GET /info</text>
+</svg>

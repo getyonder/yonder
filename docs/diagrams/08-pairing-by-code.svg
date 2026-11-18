@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 731" width="1120" height="731" role="img" aria-label="Pairing by code: a room at the meeting point brings two devices together" font-family="Figtree, Inter, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+<title>Pairing by code: a room at the meeting point brings two devices together</title>
+<rect width="1120" height="731" rx="12" fill="#f6f7fb"/>
+<line x1="230" y1="66" x2="230" y2="709" stroke="#8a93a8" stroke-width="1.2" stroke-dasharray="3 4"/>
+<line x1="560" y1="66" x2="560" y2="709" stroke="#8a93a8" stroke-width="1.2" stroke-dasharray="3 4"/>
+<line x1="890" y1="66" x2="890" y2="709" stroke="#8a93a8" stroke-width="1.2" stroke-dasharray="3 4"/>
+<rect x="120" y="18" width="220" height="50" rx="8" fill="#ffffff" stroke="#1f2433" stroke-width="1.5"/>
+<text x="230.0" y="40.5" font-size="13.5" text-anchor="middle" fill="#1f2433" font-weight="650">Device A</text>
+<text x="230.0" y="56.5" font-size="11.5" text-anchor="middle" fill="#5b6478" font-weight="400">shows a code</text>
+<rect x="450" y="18" width="220" height="50" rx="8" fill="#ffffff" stroke="#1f2433" stroke-width="1.5"/>
+<text x="560.0" y="40.5" font-size="13.5" text-anchor="middle" fill="#1f2433" font-weight="650">Meeting point</text>
+<text x="560.0" y="56.5" font-size="11.5" text-anchor="middle" fill="#5b6478" font-weight="400">opens the room; sees no secret</text>
+<rect x="780" y="18" width="220" height="50" rx="8" fill="#ffffff" stroke="#1f2433" stroke-width="1.5"/>
+<text x="890.0" y="40.5" font-size="13.5" text-anchor="middle" fill="#1f2433" font-weight="650">Device B</text>
+<text x="890.0" y="56.5" font-size="11.5" text-anchor="middle" fill="#5b6478" font-weight="400">gets the code from its user</text>
+<polyline points="230,123 560,123" fill="none" stroke="#5b6478" stroke-width="1.8" stroke-dasharray="6 4" stroke-linejoin="round"/>
+<polygon points="560,123 550.0,127.5 550.0,118.5" fill="#5b6478"/>
+<rect x="274.76" y="100" width="240.48000000000002" height="19" fill="#f6f7fb"/>
+<text x="395.0" y="115" font-size="12" text-anchor="middle" fill="#5b6478" font-weight="500">hello: name, kind, tag, room "new"</text>
+<rect x="448.56" y="141" width="222.88000000000005" height="44" rx="6" fill="#ffffff" stroke="#8a93a8" stroke-width="1.2"/>
+<text x="560.0" y="160" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">Open a room.</text>
+<text x="560.0" y="175" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">Give it a code of six digits.</text>
+<polyline points="560,224 230,224" fill="none" stroke="#5b6478" stroke-width="1.8" stroke-dasharray="6 4" stroke-linejoin="round"/>
+<polygon points="230,224 240.0,219.5 240.0,228.5" fill="#5b6478"/>
+<rect x="291.56" y="201" width="206.88000000000002" height="19" fill="#f6f7fb"/>
+<text x="395.0" y="216" font-size="12" text-anchor="middle" fill="#5b6478" font-weight="500">welcome: the code of the room</text>
+<rect x="130.0" y="242" width="200.0" height="29" rx="6" fill="#ffffff" stroke="#8a93a8" stroke-width="1.2"/>
+<text x="230.0" y="261" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">Show the room code.</text>
+<rect x="16" y="289" width="1088" height="28" rx="6" fill="#eceff6" stroke="none" stroke-width="1.5"/>
+<text x="560.0" y="308" font-size="12.5" text-anchor="middle" fill="#1f2433" font-weight="650">The owner of A tells the owner of B the room code (for example, on the telephone)</text>
+<polyline points="890,356 560,356" fill="none" stroke="#5b6478" stroke-width="1.8" stroke-dasharray="6 4" stroke-linejoin="round"/>
+<polygon points="560,356 570.0,351.5 570.0,360.5" fill="#5b6478"/>
+<rect x="594.6800000000001" y="333" width="260.64" height="19" fill="#f6f7fb"/>
+<text x="725.0" y="348" font-size="12" text-anchor="middle" fill="#5b6478" font-weight="500">hello: name, kind, tag, room "483921"</text>
+<rect x="425.03999999999996" y="374" width="269.9200000000001" height="44" rx="6" fill="#ffffff" stroke="#8a93a8" stroke-width="1.2"/>
+<text x="560.0" y="393" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">Put B in the room.</text>
+<text x="560.0" y="408" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">Close the room to all other devices.</text>
+<polyline points="560,457 890,457" fill="none" stroke="#5b6478" stroke-width="1.8" stroke-dasharray="6 4" stroke-linejoin="round"/>
+<polygon points="890,457 880.0,461.5 880.0,452.5" fill="#5b6478"/>
+<rect x="611.48" y="434" width="227.04000000000002" height="19" fill="#f6f7fb"/>
+<text x="725.0" y="449" font-size="12" text-anchor="middle" fill="#5b6478" font-weight="500">welcome: device A is in the room</text>
+<polyline points="560,498 230,498" fill="none" stroke="#5b6478" stroke-width="1.8" stroke-dasharray="6 4" stroke-linejoin="round"/>
+<polygon points="230,498 240.0,493.5 240.0,502.5" fill="#5b6478"/>
+<rect x="311.72" y="475" width="166.56" height="19" fill="#f6f7fb"/>
+<text x="395.0" y="490" font-size="12" text-anchor="middle" fill="#5b6478" font-weight="500">device B is in the room</text>
+<rect x="16" y="518" width="1088" height="28" rx="6" fill="#eceff6" stroke="none" stroke-width="1.5"/>
+<text x="560.0" y="537" font-size="12.5" text-anchor="middle" fill="#1f2433" font-weight="650">Device B asks device A to pair: messages 1 to 4 of figure 7, with B as the device that asks</text>
+<rect x="110" y="562" width="900" height="44" rx="6" fill="#ffffff" stroke="#8a93a8" stroke-width="1.2"/>
+<text x="560.0" y="581" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">Each device shows a second code, which comes from the shared secret.</text>
+<text x="560.0" y="596" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">The two owners compare the codes. Each owner confirms.</text>
+<rect x="16" y="624" width="1088" height="28" rx="6" fill="#eceff6" stroke="none" stroke-width="1.5"/>
+<text x="560.0" y="643" font-size="12.5" text-anchor="middle" fill="#1f2433" font-weight="650">Device A uses the link of B: the procedure continues as in figure 6, through the tunnel</text>
+<rect x="775.2" y="668" width="229.5999999999999" height="29" rx="6" fill="#ffffff" stroke="#8a93a8" stroke-width="1.2"/>
+<text x="890.0" y="687" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">Leave the room. The room ends.</text>
+</svg>

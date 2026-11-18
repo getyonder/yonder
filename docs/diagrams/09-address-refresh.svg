@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 655" width="920" height="655" role="img" aria-label="Address refresh: how paired devices find each other after a change of home relay" font-family="Figtree, Inter, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+<title>Address refresh: how paired devices find each other after a change of home relay</title>
+<rect width="920" height="655" rx="12" fill="#f6f7fb"/>
+<line x1="230" y1="66" x2="230" y2="633" stroke="#8a93a8" stroke-width="1.2" stroke-dasharray="3 4"/>
+<line x1="690" y1="66" x2="690" y2="633" stroke="#8a93a8" stroke-width="1.2" stroke-dasharray="3 4"/>
+<rect x="120" y="18" width="220" height="50" rx="8" fill="#ffffff" stroke="#1f2433" stroke-width="1.5"/>
+<text x="230.0" y="40.5" font-size="13.5" text-anchor="middle" fill="#1f2433" font-weight="650">Device A</text>
+<text x="230.0" y="56.5" font-size="11.5" text-anchor="middle" fill="#5b6478" font-weight="400">has a new address</text>
+<rect x="580" y="18" width="220" height="50" rx="8" fill="#ffffff" stroke="#1f2433" stroke-width="1.5"/>
+<text x="690.0" y="40.5" font-size="13.5" text-anchor="middle" fill="#1f2433" font-weight="650">Device B</text>
+<text x="690.0" y="56.5" font-size="11.5" text-anchor="middle" fill="#5b6478" font-weight="400">paired with A</text>
+<rect x="16" y="102" width="888" height="28" rx="6" fill="#eceff6" stroke="none" stroke-width="1.5"/>
+<text x="460.0" y="121" font-size="12.5" text-anchor="middle" fill="#1f2433" font-weight="650">Method 1, tell: the home relay of A changed, and A can reach B</text>
+<polyline points="230,184 690,184" fill="none" stroke="#4f46e5" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="690,184 680.0,188.5 680.0,179.5" fill="#4f46e5"/>
+<rect x="339.76" y="146" width="240.48000000000002" height="34" fill="#f6f7fb"/>
+<text x="460.0" y="161" font-size="12" text-anchor="middle" fill="#4f46e5" font-weight="500">GET /info, with the header</text>
+<text x="460.0" y="176" font-size="12" text-anchor="middle" fill="#4f46e5" font-weight="500">Yonder-Address: &lt;new address of A&gt;</text>
+<rect x="524.8" y="202" width="330.4000000000001" height="44" rx="6" fill="#ffffff" stroke="#8a93a8" stroke-width="1.2"/>
+<text x="690.0" y="221" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">The tunnel proves that the request is from A.</text>
+<text x="690.0" y="236" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">Store the new address of A.</text>
+<polyline points="690,285 230,285" fill="none" stroke="#4f46e5" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="230,285 240.0,280.5 240.0,289.5" fill="#4f46e5"/>
+<rect x="370.0" y="262" width="180.00000000000003" height="19" fill="#f6f7fb"/>
+<text x="460.0" y="277" font-size="12" text-anchor="middle" fill="#4f46e5" font-weight="500">reply: name and kind of B</text>
+<rect x="16" y="305" width="888" height="28" rx="6" fill="#eceff6" stroke="none" stroke-width="1.5"/>
+<text x="460.0" y="324" font-size="12.5" text-anchor="middle" fill="#1f2433" font-weight="650">Method 2, search: the home relay of B changed, and A calls first</text>
+<polyline points="230,372 561.2,372" fill="none" stroke="#b42318" stroke-width="1.8" stroke-linejoin="round"/>
+<line x1="554.2" y1="365" x2="568.2" y2="379" stroke="#b42318" stroke-width="2.2"/>
+<line x1="554.2" y1="379" x2="568.2" y2="365" stroke="#b42318" stroke-width="2.2"/>
+<rect x="333.03999999999996" y="349" width="253.92000000000002" height="19" fill="#f6f7fb"/>
+<text x="460.0" y="364" font-size="12" text-anchor="middle" fill="#b42318" font-weight="500">GET /info at the stored address of B</text>
+<rect x="37.91999999999999" y="390" width="384.1600000000001" height="44" rx="6" fill="#ffffff" stroke="#8a93a8" stroke-width="1.2"/>
+<text x="230.0" y="409" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">No answer. Calculate one address for each other relay</text>
+<text x="230.0" y="424" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">in the list: the same keys of B, on that relay.</text>
+<polyline points="230,488 690,488" fill="none" stroke="#4f46e5" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="690,488 680.0,492.5 680.0,483.5" fill="#4f46e5"/>
+<rect x="272.55999999999995" y="450" width="374.88000000000005" height="34" fill="#f6f7fb"/>
+<text x="460.0" y="465" font-size="12" text-anchor="middle" fill="#4f46e5" font-weight="500">GET /info at the calculated addresses (3 at one time),</text>
+<text x="460.0" y="480" font-size="12" text-anchor="middle" fill="#4f46e5" font-weight="500">with the header Yonder-Address</text>
+<polyline points="690,529 230,529" fill="none" stroke="#4f46e5" stroke-width="1.8" stroke-linejoin="round"/>
+<polygon points="230,529 240.0,524.5 240.0,533.5" fill="#4f46e5"/>
+<rect x="299.44" y="506" width="321.12" height="19" fill="#f6f7fb"/>
+<text x="460.0" y="521" font-size="12" text-anchor="middle" fill="#4f46e5" font-weight="500">reply, from the address on the home relay of B</text>
+<rect x="108.47999999999999" y="547" width="243.04" height="29" rx="6" fill="#ffffff" stroke="#8a93a8" stroke-width="1.2"/>
+<text x="230.0" y="566" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">Store the address that answered.</text>
+<rect x="585.28" y="592" width="209.44000000000005" height="29" rx="6" fill="#ffffff" stroke="#8a93a8" stroke-width="1.2"/>
+<text x="690.0" y="611" font-size="12" text-anchor="middle" fill="#1f2433" font-weight="400">Store the new address of A.</text>
+</svg>
