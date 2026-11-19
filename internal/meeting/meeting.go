@@ -24,6 +24,7 @@ import (
 
 	"yonder/internal/nearby"
 	"yonder/internal/tally/agent"
+	"yonder/internal/waiting"
 )
 
 // Limits keep one address from crowding the meeting point or the devices
@@ -36,6 +37,11 @@ type Limits struct {
 	// have connected, so that someone with many addresses cannot take
 	// every place.
 	Block int
+	// Wide is the most devices one wide block of IPv6 addresses (see
+	// WideOf) may have connected. Blocks of IPv6 addresses are cheap to
+	// have many of, so this is the limit that holds for someone with a
+	// large range of them.
+	Wide int
 	// Total is the most devices connected at once, over all addresses.
 	Total int
 	// PerDevice and PerGroup are the most messages a device, and all the
@@ -46,26 +52,41 @@ type Limits struct {
 	PerDevice int
 	PerGroup  int
 	// Rooms is the most rooms open at once, AddressRooms the most that one
-	// address may have opened, and BlockRooms the most that one block of
-	// addresses may have opened (see room.go). The devices in a room count
-	// for Block and Total as any other.
+	// address may have opened, and BlockRooms and WideRooms the most that
+	// one block and one wide block of addresses may have opened (see
+	// room.go). The devices in a room count for Block, Wide and Total as
+	// any other.
 	Rooms        int
 	AddressRooms int
 	BlockRooms   int
+	WideRooms    int
 	// Misses is how many times one address may ask for a room that is not
 	// there within missWindow before it is refused for missPause;
-	// BlockMisses is the same for one block of addresses.
+	// BlockMisses and WideMisses are the same for one block and one wide
+	// block of addresses.
 	Misses      int
 	BlockMisses int
+	WideMisses  int
+	// Waiting is the most connections that may be waiting to say hello.
+	// One more lets the one that has waited longest go (package waiting),
+	// so that silent connections from many addresses cannot pile up and
+	// cannot shut the others out. 0 is no limit.
+	Waiting int
 }
 
 // DefaultLimits are the limits Yonder's server runs with. Pairing takes
 // about five messages from each device. A block holds two addresses' worth,
 // so filling the meeting point takes at least 32 blocks, and filling its
-// rooms at least 25.
+// rooms at least 25. Over IPv6, where one holder can have thousands of
+// blocks, a wide block holds four blocks' worth: filling the meeting point
+// takes at least 8 wide blocks, and filling its rooms at least 7. A wide
+// block has ten blocks' worth of misses, which is 1200 of the million codes
+// in a room's life.
 var DefaultLimits = Limits{
-	Group: 32, Block: 64, Total: 2000, PerDevice: 40, PerGroup: 240,
-	Rooms: 200, AddressRooms: 4, BlockRooms: 8, Misses: 30, BlockMisses: 120,
+	Group: 32, Block: 64, Wide: 256, Total: 2000, PerDevice: 40, PerGroup: 240,
+	Rooms: 200, AddressRooms: 4, BlockRooms: 8, WideRooms: 32,
+	Misses: 30, BlockMisses: 120, WideMisses: 1200,
+	Waiting: 1024,
 }
 
 // Reasons a connection is refused or dropped, sent as the close reason.
@@ -85,6 +106,10 @@ const (
 	// backlog is how many messages may wait for a slow device before it
 	// is dropped.
 	backlog = 32
+	// maxGroups is the most groups kept at once. Most are empty ones kept
+	// for their minute; when there are this many, the empty ones are
+	// forgotten early, so a group with devices in it always has a place.
+	maxGroups = 20_000
 )
 
 // Point is a meeting point. The zero value is not usable; call New.
@@ -109,13 +134,16 @@ type Point struct {
 	// now is the clock; tests replace it.
 	now func() time.Time
 
-	mu     sync.Mutex
-	total  int
-	groups map[string]*group
-	blocks map[string]int     // devices connected, by block
-	rooms  map[string]*group  // rooms open, by code (room.go)
-	misses map[string]*misses // rooms asked for in vain, by address and by block
-	swept  time.Time          // when misses was last cleared of old counts
+	waiting *waiting.Line // the connections that have not said hello
+
+	mu          sync.Mutex
+	total       int
+	groups      map[string]*group
+	groupsSwept time.Time          // when groups was last cleared of empty ones
+	blocks      map[string]int     // devices connected, by block and by wide block
+	rooms       map[string]*group  // rooms open, by code (room.go)
+	misses      map[string]*misses // rooms asked for in vain, by address, block and wide block
+	swept       time.Time          // when misses was last cleared of old counts
 }
 
 // Event is something the meeting point can report to Point.Count. It says
@@ -175,6 +203,7 @@ type member struct {
 	peer   nearby.Peer
 	group  *group
 	block  string
+	wide   string // "" over IPv4
 	out    chan []byte
 	budget budget
 	// kick ends the connection of a member that has stopped taking
@@ -200,7 +229,7 @@ func (b *budget) spend(now time.Time, limit int) bool {
 // New returns a meeting point that groups visitors by the address their
 // connection comes from.
 func New(limits Limits) *Point {
-	return &Point{limits: limits, addr: remoteAddr, now: time.Now, groups: map[string]*group{}, blocks: map[string]int{}, rooms: map[string]*group{}, misses: map[string]*misses{}}
+	return &Point{limits: limits, addr: remoteAddr, now: time.Now, waiting: waiting.New(limits.Waiting), groups: map[string]*group{}, blocks: map[string]int{}, rooms: map[string]*group{}, misses: map[string]*misses{}}
 }
 
 func remoteAddr(r *http.Request) (netip.Addr, error) {
@@ -233,6 +262,20 @@ func BlockOf(a netip.Addr) string {
 	return p.String()
 }
 
+// WideOf names the wide block an IPv6 address belongs to: the /32, which is
+// what one provider is commonly given. One holder can have thousands of
+// /48 blocks (a /36 has 4096), so the limits for a block alone would let
+// such a holder take every place and try most room codes. An IPv4 address
+// has none ("").
+func WideOf(a netip.Addr) string {
+	a = a.Unmap()
+	if a.Is4() {
+		return ""
+	}
+	p, _ := a.WithZone("").Prefix(32)
+	return p.String()
+}
+
 // ServeHTTP takes one device's connection and holds it until it ends.
 func (p *Point) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	a, err := p.addr(r)
@@ -248,15 +291,19 @@ func (p *Point) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer c.CloseNow()
 	c.SetReadLimit(nearby.MaxMessage)
-	p.serve(r.Context(), c, GroupOf(a), BlockOf(a))
+	p.serve(r.Context(), c, GroupOf(a), BlockOf(a), WideOf(a))
 }
 
-func (p *Point) serve(ctx context.Context, c *websocket.Conn, key, block string) {
+func (p *Point) serve(ctx context.Context, c *websocket.Conn, key, block, wide string) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	// Until it has said hello, the connection is one of those that wait,
+	// and is let go (the read ends) if too many newer ones come.
 	helloCtx, helloDone := context.WithTimeout(ctx, helloWait)
+	said := p.waiting.Enter(helloDone)
 	hello, err := read(helloCtx, c)
+	said()
 	helloDone()
 	if err != nil || hello.Type != nearby.TypeHello || hello.Peer == nil || !validPeer(*hello.Peer) {
 		c.Close(websocket.StatusPolicyViolation, "say hello first")
@@ -273,7 +320,7 @@ func (p *Point) serve(ctx context.Context, c *websocket.Conn, key, block string)
 	if v := hello.Peer.Version; v != "dev" && !agent.KnownVersion(v) {
 		hello.Peer.Version = ""
 	}
-	m := &member{peer: *hello.Peer, block: block, out: make(chan []byte, backlog), kick: cancel}
+	m := &member{peer: *hello.Peer, block: block, wide: wide, out: make(chan []byte, backlog), kick: cancel}
 	m.peer.ID = newID()
 	var reason string
 	switch hello.Room {
@@ -347,6 +394,11 @@ func (p *Point) join(key string, m *member) (reason string) {
 	now := p.now()
 	g := p.groups[key]
 	if g == nil {
+		// No group is made for a device that has no place: a flood from
+		// many addresses would make one for each.
+		if !p.hasPlace(m) {
+			return ReasonFull
+		}
 		p.sweep(now)
 		g = &group{members: map[string]*member{}}
 		p.groups[key] = g
@@ -354,25 +406,39 @@ func (p *Point) join(key string, m *member) (reason string) {
 	if !g.budget.spend(now, p.limits.PerGroup) {
 		return ReasonBusy
 	}
-	if len(g.members) >= p.limits.Group || !p.hasPlace(m.block) {
+	if len(g.members) >= p.limits.Group || !p.hasPlace(m) {
 		return ReasonFull
 	}
 	p.enter(g, m, now)
 	return ""
 }
 
-// hasPlace reports whether one more device of a block may connect, under
-// the limits for its block and in total. Called with the lock held.
-func (p *Point) hasPlace(block string) bool {
-	return p.blocks[block] < p.limits.Block && p.total < p.limits.Total
+// hasPlace reports whether one more device may connect, under the limits
+// for its block, for its wide block and in total. Called with the lock held.
+func (p *Point) hasPlace(m *member) bool {
+	return p.blocks[m.block] < p.limits.Block &&
+		(m.wide == "" || p.blocks[m.wide] < p.limits.Wide) &&
+		p.total < p.limits.Total
 }
 
-// enter puts a member in a group, counts it for its block and in total,
-// tells it who is there and tells them it has come. Called with the lock
-// held.
+// placed counts a device that comes (by 1) or goes (by -1) for its block
+// and its wide block, and in total. Called with the lock held.
+func (p *Point) placed(m *member, by int) {
+	p.total += by
+	for _, key := range []string{m.block, m.wide} {
+		if key == "" {
+			continue
+		}
+		if p.blocks[key] += by; p.blocks[key] == 0 {
+			delete(p.blocks, key)
+		}
+	}
+}
+
+// enter puts a member in a group, counts it, tells it who is there and
+// tells them it has come. Called with the lock held.
 func (p *Point) enter(g *group, m *member, now time.Time) {
-	p.blocks[m.block]++
-	p.total++
+	p.placed(m, 1)
 	m.group = g
 	m.budget.spend(now, p.limits.PerDevice)
 	welcome := nearby.Message{Type: nearby.TypeWelcome, ID: m.peer.ID, Peers: []nearby.Peer{}}
@@ -395,10 +461,7 @@ func (p *Point) leave(m *member) {
 	defer p.mu.Unlock()
 	g := m.group
 	delete(g.members, m.peer.ID)
-	if p.blocks[m.block]--; p.blocks[m.block] == 0 {
-		delete(p.blocks, m.block)
-	}
-	p.total--
+	p.placed(m, -1)
 	if g.room != nil {
 		p.endRoom(g)
 	}
@@ -408,10 +471,19 @@ func (p *Point) leave(m *member) {
 	}
 }
 
-// sweep forgets empty groups whose minute is over. Called with the lock held.
+// sweep forgets empty groups whose minute is over, at most once in a
+// minute: it reads every group, and a flood of new groups would otherwise
+// make it do so for each. With maxGroups kept it forgets every empty group
+// at once, which costs those addresses only the count of their last minute's
+// messages. Called with the lock held, before a group is made.
 func (p *Point) sweep(now time.Time) {
+	full := len(p.groups) >= maxGroups
+	if !full && now.Sub(p.groupsSwept) < time.Minute {
+		return
+	}
+	p.groupsSwept = now
 	for key, g := range p.groups {
-		if len(g.members) == 0 && now.Sub(g.budget.start) >= time.Minute {
+		if len(g.members) == 0 && (full || now.Sub(g.budget.start) >= time.Minute) {
 			delete(p.groups, key)
 		}
 	}

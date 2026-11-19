@@ -4,13 +4,15 @@
 // before a data channel (internal/direct). The relay's own STUN cannot do
 // this: it answers only a request from Tailscale's code.
 //
-// It keeps no record. For the limit it holds the addresses of the last few
-// seconds in memory, and it counts how many requests it answered and how
-// many it did not, with no address.
+// It keeps no record and holds no address. For the limit it counts the
+// requests of the last few seconds in a table of fixed size, at a place
+// found from the address, and it counts how many requests it answered and
+// how many it did not.
 package stun
 
 import (
 	"encoding/binary"
+	"hash/maphash"
 	"net"
 	"net/netip"
 	"sync"
@@ -75,24 +77,35 @@ func Answer(req []byte, from netip.AddrPort) []byte {
 // and many devices can share one public address, so the limit is far above
 // one device's need and low enough that a false sender's address gets little.
 const (
-	perSource  = 60
-	window     = 10 * time.Second
-	sourceMost = 50000
+	perSource = 60
+	window    = 10 * time.Second
+	// places is how many counts the table has. It is a power of two.
+	places = 1 << 18
 )
 
 // limiter counts the requests of each source in the present window. When
-// the window ends, all counts are dropped: no address is held for longer.
+// the window ends, all counts are dropped.
+//
+// The table has a fixed size and each source has one place in it, found by
+// a hash that is keyed anew at each start. So the table cannot fill up,
+// whatever number of senders, true or false, there is: a list of sources
+// with a largest size refused every new source once false senders had
+// filled it, which 5,000 packets a second did. Here two sources can have
+// the same place and then share one limit. Packets from false senders
+// spread over all places, and other sources begin to be refused only when
+// the places reach the limit: at more than a million packets a second.
 type limiter struct {
-	per, most int
-	window    time.Duration
+	per    int // at most 255, the most a count can hold
+	window time.Duration
+	seed   maphash.Seed
 
 	mu     sync.Mutex
-	counts map[netip.Addr]int
+	counts []uint8
 	ends   time.Time
 }
 
 func newLimiter() *limiter {
-	return &limiter{per: perSource, most: sourceMost, window: window, counts: map[netip.Addr]int{}}
+	return &limiter{per: perSource, window: window, seed: maphash.MakeSeed(), counts: make([]uint8, places)}
 }
 
 // source is the address the limit counts for.
@@ -105,21 +118,25 @@ func source(ip netip.Addr) netip.Addr {
 	return ip
 }
 
+// place is where the table counts for ip's source.
+func (l *limiter) place(ip netip.Addr) int {
+	b := source(ip).As16()
+	return int(maphash.Bytes(l.seed, b[:]) % uint64(len(l.counts)))
+}
+
 // allow reports whether a request from ip at the time now gets an answer.
-// With the table full, a source not in it gets none until the window ends.
 func (l *limiter) allow(ip netip.Addr, now time.Time) bool {
+	i := l.place(ip)
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if !now.Before(l.ends) {
 		clear(l.counts)
 		l.ends = now.Add(l.window)
 	}
-	s := source(ip)
-	n, known := l.counts[s]
-	if n >= l.per || (!known && len(l.counts) >= l.most) {
+	if int(l.counts[i]) >= l.per {
 		return false
 	}
-	l.counts[s] = n + 1
+	l.counts[i]++
 	return true
 }
 

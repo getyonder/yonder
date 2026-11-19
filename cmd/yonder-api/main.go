@@ -40,6 +40,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -54,6 +55,7 @@ import (
 	"yonder/internal/tally"
 	"yonder/internal/tally/agent"
 	"yonder/internal/usage"
+	"yonder/internal/waiting"
 )
 
 func main() {
@@ -161,7 +163,7 @@ func names(list string) []string {
 // to say (a handshake that failed, say) goes to errors without the
 // visitor's address: see noAddress.
 func newServer(h http.Handler, errors io.Writer) *http.Server {
-	return &http.Server{
+	srv := &http.Server{
 		Handler:           h,
 		ErrorLog:          log.New(noAddress{log.New(errors, "", log.LstdFlags)}, "", 0),
 		ReadHeaderTimeout: 10 * time.Second,
@@ -169,6 +171,43 @@ func newServer(h http.Handler, errors io.Writer) *http.Server {
 		// The answers are small.
 		WriteTimeout: time.Minute,
 		IdleTimeout:  2 * time.Minute,
+	}
+	holdSilent(srv, mostSilent)
+	return srv
+}
+
+// mostSilent is the most connections that may be open with no request
+// made yet: still in the TLS handshake, or sending their header.
+const mostSilent = 1024
+
+// holdSilent limits the connections of srv that have not yet made a request
+// to most. The time limits alone let any number of them wait; nginx, in
+// front, limits one address but not many. One more than most lets the one
+// that has waited longest go (package waiting), so the newest, which an
+// honest visitor is, always gets in. The meeting point does the same for
+// the step after: the wait for a hello.
+func holdSilent(srv *http.Server, most int) {
+	type leaveKey struct{}
+	line := waiting.New(most)
+	var leaves sync.Map // net.Conn to its leave, for a connection that ends with no request
+	h := srv.Handler
+	srv.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if leave, ok := r.Context().Value(leaveKey{}).(func()); ok {
+			leave()
+		}
+		h.ServeHTTP(w, r)
+	})
+	srv.ConnContext = func(ctx context.Context, c net.Conn) context.Context {
+		leave := line.Enter(func() { c.Close() })
+		leaves.Store(c, leave)
+		return context.WithValue(ctx, leaveKey{}, leave)
+	}
+	srv.ConnState = func(c net.Conn, state http.ConnState) {
+		if state == http.StateClosed || state == http.StateHijacked {
+			if leave, ok := leaves.LoadAndDelete(c); ok {
+				leave.(func())()
+			}
+		}
 	}
 }
 
@@ -351,7 +390,9 @@ func (s *site) handler() http.Handler {
 			return
 		}
 		if s.logReq {
-			log.Printf("%s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+			// The path is the visitor's to choose: quoted, so that one
+			// with a line break in it cannot write a line of its own.
+			log.Printf("%s %q from %s", r.Method, r.URL.Path, r.RemoteAddr)
 		}
 		s.count(r)
 		if r.URL.Path == nearby.Path {

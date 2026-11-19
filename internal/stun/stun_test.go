@@ -100,11 +100,28 @@ func TestAnswerRefusesWhatIsNoBindingRequest(t *testing.T) {
 	}
 }
 
+// apart returns n addresses that have n places in l's table. Which
+// addresses share a place changes with each start, so a test that needs
+// sources with limits of their own asks for them here.
+func apart(l *limiter, n int) []netip.Addr {
+	var out []netip.Addr
+	taken := map[int]bool{}
+	for i := 0; len(out) < n; i++ {
+		a := netip.AddrFrom4([4]byte{203, 0, byte(i >> 8), byte(i)})
+		if !taken[l.place(a)] {
+			taken[l.place(a)] = true
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
 func TestLimitHoldsForOneSourceAndEndsWithTheWindow(t *testing.T) {
 	l := newLimiter()
 	l.per = 3
 	now := time.Unix(1000, 0)
-	a, b := netip.MustParseAddr("203.0.113.7"), netip.MustParseAddr("203.0.113.8")
+	two := apart(l, 2)
+	a, b := two[0], two[1]
 	for i := range 3 {
 		if !l.allow(a, now) {
 			t.Fatalf("request %d of 3 was refused", i+1)
@@ -119,8 +136,8 @@ func TestLimitHoldsForOneSourceAndEndsWithTheWindow(t *testing.T) {
 	if !l.allow(a, now.Add(l.window)) {
 		t.Error("refused after the window ended")
 	}
-	if len(l.counts) != 1 {
-		t.Errorf("%d sources are held after the window ended, want 1", len(l.counts))
+	if n := l.counts[l.place(b)]; n != 0 {
+		t.Errorf("a count of %d is held after the window ended, want 0", n)
 	}
 }
 
@@ -134,27 +151,31 @@ func TestLimitCountsAnIPv6NetworkAsOneSource(t *testing.T) {
 	if l.allow(netip.MustParseAddr("2001:db8:1:2:ffff::9"), now) {
 		t.Error("a second address of the same /64 was answered")
 	}
-	if !l.allow(netip.MustParseAddr("2001:db8:1:3::1"), now) {
-		t.Error("another /64 was refused")
+	if a, b := netip.MustParseAddr("2001:db8:1:2::1"), netip.MustParseAddr("2001:db8:1:2:ffff::9"); l.place(a) != l.place(b) {
+		t.Error("two addresses of one /64 have two places")
+	}
+	if a, b := source(netip.MustParseAddr("2001:db8:1:2::1")), source(netip.MustParseAddr("2001:db8:1:3::1")); a == b {
+		t.Error("two /64s are one source")
 	}
 }
 
-func TestLimitTableIsBounded(t *testing.T) {
+// Many false senders do not get a true one refused: the table cannot fill
+// up. Four times as many sources as the old list held each ask once, and a
+// source that comes after them is still answered.
+func TestLimitDoesNotRefuseNewSourcesUnderAFlood(t *testing.T) {
 	l := newLimiter()
-	l.most = 2
 	now := time.Unix(1000, 0)
-	a, b, c := netip.MustParseAddr("203.0.113.1"), netip.MustParseAddr("203.0.113.2"), netip.MustParseAddr("203.0.113.3")
-	if !l.allow(a, now) || !l.allow(b, now) {
-		t.Fatal("refused before the table was full")
+	for i := range 200_000 {
+		l.allow(netip.AddrFrom4([4]byte{10, byte(i >> 16), byte(i >> 8), byte(i)}), now)
 	}
-	if l.allow(c, now) {
-		t.Error("a new source was answered with the table full")
+	refused := 0
+	for i := range 1000 {
+		if !l.allow(netip.AddrFrom4([4]byte{198, 51, byte(i >> 8), byte(i)}), now) {
+			refused++
+		}
 	}
-	if !l.allow(a, now) {
-		t.Error("a source in the table was refused")
-	}
-	if len(l.counts) != 2 {
-		t.Errorf("the table holds %d sources, want 2", len(l.counts))
+	if refused != 0 {
+		t.Errorf("%d of 1000 new sources were refused after 200,000 others had asked once", refused)
 	}
 }
 

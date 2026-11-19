@@ -32,7 +32,11 @@ const (
 	missPause  = 10 * time.Minute
 	// maxMisses is the most counts of misses kept at once, and missSweep
 	// how often the counts that no longer matter are looked for. While
-	// the list is full, rooms are not looked for.
+	// the list is full, a miss that has no count yet is not counted, and
+	// nobody is refused for that: whoever can fill the list (15,000
+	// addresses that each miss) has by then more tries than the limits
+	// leave to anyone, and refusing would only add that no device with the
+	// right code gets in.
 	maxMisses = 30_000
 	missSweep = time.Minute
 )
@@ -42,6 +46,7 @@ type room struct {
 	code   string
 	owner  string // the address that opened it, as GroupOf names it
 	block  string // and its block, as BlockOf names it
+	wide   string // and its wide block, as WideOf names it
 	opened time.Time
 	met    time.Time // when the second device came; no other may then
 	ended  bool
@@ -59,7 +64,7 @@ func (p *Point) openRoom(key string, m *member) (reason string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	now := p.now()
-	owned, blockOwned := 0, 0
+	owned, blockOwned, wideOwned := 0, 0, 0
 	for _, g := range p.rooms {
 		if p.roomOver(g, now) {
 			continue // and no longer in p.rooms
@@ -70,16 +75,19 @@ func (p *Point) openRoom(key string, m *member) (reason string) {
 		if g.room.block == m.block {
 			blockOwned++
 		}
+		if m.wide != "" && g.room.wide == m.wide {
+			wideOwned++
+		}
 	}
-	if owned >= p.limits.AddressRooms || blockOwned >= p.limits.BlockRooms ||
-		len(p.rooms) >= p.limits.Rooms || !p.hasPlace(m.block) {
+	if owned >= p.limits.AddressRooms || blockOwned >= p.limits.BlockRooms || wideOwned >= p.limits.WideRooms ||
+		len(p.rooms) >= p.limits.Rooms || !p.hasPlace(m) {
 		return ReasonFull
 	}
 	code := newCode()
 	for p.rooms[code] != nil {
 		code = newCode()
 	}
-	g := &group{members: map[string]*member{}, room: &room{code: code, owner: key, block: m.block, opened: now}}
+	g := &group{members: map[string]*member{}, room: &room{code: code, owner: key, block: m.block, wide: m.wide, opened: now}}
 	p.rooms[code] = g
 	p.count(RoomOpened)
 	p.enter(g, m, now)
@@ -91,23 +99,37 @@ func (p *Point) joinRoom(code, key string, m *member) (reason string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	now := p.now()
-	// The block first, so that a paused block makes no counts for its
-	// addresses.
-	block := p.missesOf("block "+m.block, now)
-	if block == nil || now.Before(block.paused) {
-		return ReasonBusy
+	// Who asks is counted three ways, the widest first. A pause of any of
+	// them refuses it before the room is looked for, so a paused block
+	// makes no counts for its addresses.
+	counted := []struct {
+		key   string
+		limit int
+	}{
+		{"wide " + m.wide, p.limits.WideMisses},
+		{"block " + m.block, p.limits.BlockMisses},
+		{"address " + key, p.limits.Misses},
 	}
-	address := p.missesOf("address "+key, now)
-	if address == nil || now.Before(address.paused) {
-		return ReasonBusy
+	if m.wide == "" {
+		counted = counted[1:]
+	}
+	for _, c := range counted {
+		if had := p.misses[c.key]; had != nil && now.Before(had.paused) {
+			return ReasonBusy
+		}
 	}
 	g := p.rooms[code]
 	if g == nil || !g.room.met.IsZero() || p.roomOver(g, now) {
-		address.miss(now, p.limits.Misses)
-		block.miss(now, p.limits.BlockMisses)
+		// A count is made at the first miss, never for a device that
+		// brings the right code.
+		for _, c := range counted {
+			if count := p.missesOf(c.key, now); count != nil {
+				count.miss(now, c.limit)
+			}
+		}
 		return ReasonNoRoom
 	}
-	if !p.hasPlace(m.block) {
+	if !p.hasPlace(m) {
 		return ReasonFull
 	}
 	g.room.met = now
@@ -140,7 +162,7 @@ func (p *Point) endRoom(g *group) {
 	delete(p.rooms, g.room.code)
 }
 
-// missesOf finds or makes the count for an address or a block. When it has
+// missesOf finds or makes the count for an address, a block or a wide block. When it has
 // to make one, it forgets the counts that no longer matter, at most once in
 // missSweep, and it returns nil if the list is still full. Called with the
 // lock held.

@@ -48,7 +48,7 @@ import (
 	"yonder/internal/settings"
 )
 
-const version = "0.1.41"
+const version = "0.1.42"
 
 const (
 	// findFor is how long `send` looks for a nearby device before giving up.

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"io"
 	"net"
@@ -256,6 +257,51 @@ func TestSlowHeaderIsClosed(t *testing.T) {
 	c.SetReadDeadline(time.Now().Add(10 * time.Second))
 	if _, err := io.ReadAll(c); err != nil {
 		t.Fatalf("the server held the connection: %v", err)
+	}
+}
+
+// Connections that make no request are limited in number: one more lets
+// the one that has waited longest go, and one that then makes its request
+// is answered.
+func TestSilentConnectionsAreLimited(t *testing.T) {
+	asked := make(chan struct{}, 1)
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { asked <- struct{}{} })}
+	holdSilent(srv, 2)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go srv.Serve(ln)
+	t.Cleanup(func() { srv.Close() })
+	// silent connects and sends part of a header. The server takes
+	// connections in the order they come, on one goroutine, so the first
+	// here is the one that has waited longest.
+	silent := func() net.Conn {
+		c, err := net.Dial("tcp", ln.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { c.Close() })
+		c.Write([]byte("GET / HTTP/1.1\r\nHost: x\r\n"))
+		// The deadline is only the limit for a failing test.
+		c.SetReadDeadline(time.Now().Add(10 * time.Second))
+		return c
+	}
+	first, second, third := silent(), silent(), silent()
+	if _, err := io.ReadAll(first); err != nil {
+		t.Fatalf("the server held the connection that waited longest: %v", err)
+	}
+	for _, c := range []net.Conn{second, third} {
+		c.Write([]byte("\r\n"))
+		select {
+		case <-asked:
+		case <-time.After(10 * time.Second):
+			t.Fatal("one that still waited was not heard")
+		}
+		res, err := http.ReadResponse(bufio.NewReader(c), nil)
+		if err != nil || res.StatusCode != http.StatusOK {
+			t.Fatalf("one that still waited got no answer: %v", err)
+		}
 	}
 }
 

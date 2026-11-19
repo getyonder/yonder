@@ -196,9 +196,16 @@ func Answer(ctx context.Context, cfg Config, offer []byte) (*Peer, []byte, error
 // start makes a Peer and its description, with the servers of cfg.STUN,
 // and with those of cfg.Fallback if the first gave no address (see
 // Config.Fallback). If the second try fails, the first one stands.
+//
+// A first Peer that has a path already stands too. An answering end starts
+// its checks while it still asks STUN, and on one network they can find
+// the other end first; a browser then stops asking, so its description
+// has no address from STUN although STUN is well. The other end has met
+// that Peer by then, and no channel forms with a second one in its place
+// (the fault of 0.1.37 to 0.1.41 between two devices on one network).
 func start(ctx context.Context, cfg Config, create func(p *Peer) (webrtc.SessionDescription, error)) (*Peer, []byte, error) {
 	p, desc, err := describe(ctx, cfg, create)
-	if err != nil || len(cfg.STUN) == 0 || len(cfg.Fallback) == 0 || fromSTUN(desc) {
+	if err != nil || len(cfg.STUN) == 0 || len(cfg.Fallback) == 0 || fromSTUN(desc) || p.hasPath() {
 		return p, desc, err
 	}
 	second := cfg
@@ -210,6 +217,12 @@ func start(ctx context.Context, cfg Config, create func(p *Peer) (webrtc.Session
 	p.Close()
 	p2.fallback = true
 	return p2, desc2, nil
+}
+
+// hasPath reports whether the checks have found a path to the other end.
+func (p *Peer) hasPath() bool {
+	s := p.pc.ICEConnectionState()
+	return s == webrtc.ICEConnectionStateConnected || s == webrtc.ICEConnectionStateCompleted
 }
 
 // fromSTUN reports whether a description holds an address that a STUN

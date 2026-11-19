@@ -23,6 +23,16 @@ import (
 // goes through it; nothing sleeps.
 const wait = 10 * time.Second
 
+// until waits for cond to hold.
+func until(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	for deadline := time.Now().Add(wait); !cond(); time.Sleep(2 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
+		}
+	}
+}
+
 // point starts a meeting point that takes each visitor's address from the
 // "from" part of the URL, so a test can arrive from anywhere.
 func point(t *testing.T, limits Limits) (*Point, string) {
@@ -265,6 +275,104 @@ func TestBlockCap(t *testing.T) {
 		b.next() // A's leaving, so its place is free
 		arrive(t, url, from[3], "D again")
 	}
+}
+
+// Over IPv6 a wide block (a /32) has a limit of its own, so that many
+// blocks cannot take every place. IPv4 has no wide blocks.
+func TestWideCap(t *testing.T) {
+	limits := DefaultLimits
+	limits.Wide = 3
+	p, url := point(t, limits)
+	var first *device
+	for n := range 3 {
+		d := arrive(t, url, fmt.Sprintf("2001:db8:%x::1", n), "A") // a new /48 in the same /32
+		if first == nil {
+			first = d
+		}
+	}
+	d := &device{t: t, c: dial(t, url, "2001:db8:ffff::1")}
+	d.send(hello("D"))
+	if reason := d.closed(); reason != ReasonFull {
+		t.Fatalf("fourth device in the wide block: closed with %q, want %q", reason, ReasonFull)
+	}
+	// No group was made for the device that had no place.
+	p.mu.Lock()
+	groups := len(p.groups)
+	p.mu.Unlock()
+	if groups != 3 {
+		t.Fatalf("%d groups, want 3: none for a device with no place", groups)
+	}
+	// Another wide block and IPv4 are not affected, and a place that is
+	// left is free again.
+	arrive(t, url, "2001:db9::1", "E")
+	for n := range 4 {
+		arrive(t, url, fmt.Sprintf("203.0.%d.1", n), "F")
+	}
+	first.c.Close(websocket.StatusNormalClosure, "")
+	until(t, "the first device's place to be free", func() bool {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		return p.blocks["2001:db8::/32"] == 2
+	})
+	arrive(t, url, "2001:db8:ffff::1", "D again")
+}
+
+// Empty groups are looked for at most once a minute, and all of them are
+// forgotten at once when maxGroups are kept.
+func TestGroupsAreForgotten(t *testing.T) {
+	p, _ := point(t, DefaultLimits)
+	now := time.Now()
+	empty := func(key string, start time.Time) {
+		p.groups[key] = &group{members: map[string]*member{}, budget: budget{start: start}}
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	empty("old", now.Add(-2*time.Minute))
+	p.sweep(now)
+	if p.groups["old"] != nil {
+		t.Fatal("an empty group was kept after its minute")
+	}
+	empty("old", now.Add(-2*time.Minute))
+	p.sweep(now.Add(30 * time.Second))
+	if p.groups["old"] == nil {
+		t.Fatal("empty groups were looked for again within a minute")
+	}
+	for i := len(p.groups); i < maxGroups; i++ {
+		empty(fmt.Sprint("filler ", i), now)
+	}
+	p.groups["held"] = &group{members: map[string]*member{"m": {}}}
+	p.sweep(now.Add(31 * time.Second))
+	if len(p.groups) != 1 || p.groups["held"] == nil {
+		t.Fatalf("%d groups after a look with the list full, want the one with a device in it", len(p.groups))
+	}
+}
+
+// Connections that do not say hello are limited in number: one more lets
+// the one that has waited longest go, and the others stay.
+func TestWaitingForHello(t *testing.T) {
+	limits := DefaultLimits
+	limits.Waiting = 2
+	p, url := point(t, limits)
+	// silent connects, says nothing, and returns when the meeting point
+	// has it among those that wait, so that the order is certain.
+	silent := func(waiting int) *device {
+		d := &device{t: t, c: dial(t, url, "203.0.113.1")}
+		until(t, "the connection to wait for its hello", func() bool { return p.waiting.Len() == waiting })
+		return d
+	}
+	first, second := silent(1), silent(2)
+	third := silent(2)
+	if msg, err := first.read(); err == nil {
+		t.Fatalf("the one that waited longest: got %+v, want its connection ended", msg)
+	}
+	// The two others are still let in.
+	for _, d := range []*device{second, third} {
+		d.send(hello("Late"))
+		if msg := d.next(); msg.Type != nearby.TypeWelcome {
+			t.Fatalf("one that still waited: got %+v, want a welcome", msg)
+		}
+	}
+	until(t, "nobody to wait", func() bool { return p.waiting.Len() == 0 })
 }
 
 func TestTotalCap(t *testing.T) {

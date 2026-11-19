@@ -1,6 +1,6 @@
 # Yonder: design document
 
-This document describes Yonder 0.1.41, the first public version. It tells you how Yonder works as one system. It shows each part, the function of each part, and the connections between the parts.
+This document describes Yonder 0.1.42. It tells you how Yonder works as one system. It shows each part, the function of each part, and the connections between the parts.
 
 The text follows the rules of ASD-STE100 Simplified Technical English: short sentences, the active voice, and one name for one thing. No STE checker examined the text.
 
@@ -263,7 +263,7 @@ The app can tell the user that a newer version of Yonder is available. It does n
 5. "Get it" opens the download page in the browser. The app opens the address in the file only if it is an `https://` address at the host name of the website (`ownPage` in `internal/gui/update.go`). If it is not, the app opens the download page whose address is in the code.
 6. "Not now" removes the notice. The app stores this version in `settings.json`. The notice comes back only for a version that is newer than the stored version.
 
-The request gives the version of the app and its system in the `User-Agent` line, for example `Yonder/0.1.41 (linux)`. The system is `windows`, `macos` or `linux`. The request contains no name and no identifier of the device. The server uses the two values for its daily totals (section 13.2). One function makes this text (`Name` in `internal/tally/agent`), and it is adjacent to the function of the server that reads it. If the request fails, the app shows nothing and asks again after 24 hours.
+The request gives the version of the app and its system in the `User-Agent` line, for example `Yonder/0.1.42 (linux)`. The system is `windows`, `macos` or `linux`. The request contains no name and no identifier of the device. The server uses the two values for its daily totals (section 13.2). One function makes this text (`Name` in `internal/tally/agent`), and it is adjacent to the function of the server that reads it. If the request fails, the app shows nothing and asks again after 24 hours.
 
 The setting "Tell me when a new version is out" is on by default. When it is off, the app sends no request.
 
@@ -277,7 +277,7 @@ The app can tell the user that its version is withdrawn. A withdrawn version is 
 
 ```json
 {
-  "version": "0.1.41",
+  "version": "0.1.42",
   "page": "https://getyonder.org/#download",
   "withdrawn": "<the bytes of the list, in base64>",
   "signature": "<the Ed25519 signature of those bytes, in base64>"
@@ -647,7 +647,7 @@ A data channel carries uploads only. These things continue to need the tunnel it
 
 - Each of the two devices asks the STUN server at each transfer with a web app. The app also asks it, not only the web app.
 - The STUN server sees the public address of the device that asks. It sees no file, no name, and not the other device.
-- **The fall-back.** If the description of a device has no address from Yonder's STUN server, the device drops that description and makes a second one with the STUN server of Cloudflare, `stun.cloudflare.com:3478` (`stunFallback` in `channel.go`; `Config.Fallback` in `internal/direct`). Each device decides this for itself. Cloudflare then sees the public address of that device. The send log records it. The reason for the fall-back is that a fault of Yonder's server must not stop the transfers between two networks.
+- **The fall-back.** If the description of a device has no address from Yonder's STUN server, the device drops that description and makes a second one with the STUN server of Cloudflare, `stun.cloudflare.com:3478` (`stunFallback` in `channel.go`; `Config.Fallback` in `internal/direct`). Each device decides this for itself. Cloudflare then sees the public address of that device. The send log records it. The reason for the fall-back is that a fault of Yonder's server must not stop the transfers between two networks. A device whose checks have found a path to the other device before its description is complete keeps that description and does not ask the fall-back server. This occurs when the two devices are on one network: a browser stops its request to the STUN server when it has a path, and its description then has no address from that server.
 - The fall-back costs the time that the first description waited: 3 seconds at most in the app and 5 seconds at most in a browser, from the 30 seconds for a data channel.
 - A device cannot see why it got no address. Thus a device also asks the fall-back server when Yonder's server answered but the answer gave no new address (a device that has a public address of its own), and when the network of the device lets no UDP through.
 - If the two STUN servers give no answer, a device offers only its own addresses. Then a data channel forms only when the two devices are on one network.
@@ -755,10 +755,13 @@ If the meeting point replaces the keys, the two devices show different codes. Th
 |---|---|
 | Devices in one group | 32 |
 | Devices in one block of addresses (IPv4 /24, IPv6 /48) | 64 |
+| Devices in one wide block of IPv6 addresses (/32) | 256. One person can have thousands of /48 blocks, thus the limit for a block is not sufficient for IPv6. IPv4 has no wide block. |
 | Devices in all groups | 2000 |
 | Messages for one device | 40 each minute |
 | Messages for one group | 240 each minute. The meeting point discards a message above this limit, and the sender stays connected. |
 | Size of one message | 4 KB |
+| Connections that have not said hello | 1024. A connection has 10 seconds to say hello. When 1024 connections wait, a new connection ends the connection that waited longest. Thus a flood of connections that stay silent does not keep a new device out: a device says hello immediately. |
+| Groups in memory | 20,000. A group with no device stays for one minute. At 20,000 groups, the meeting point removes each group that has no device. |
 
 The meeting point keeps its data only in memory.
 
@@ -796,11 +799,13 @@ Two devices on different networks are not in one group at the meeting point. The
 | Open rooms for one connection | 1 |
 | Open rooms for one address (IPv4 address, IPv6 /64) | 4 |
 | Open rooms for one block of addresses (IPv4 /24, IPv6 /48) | 8 |
-| Devices in rooms | A device in a room is counted in the limits of section 9.2 for its block of addresses (64) and for all devices (2000). |
+| Open rooms for one wide block of IPv6 addresses (/32) | 32 |
+| Devices in rooms | A device in a room is counted in the limits of section 9.2 for its block of addresses (64), for its wide block (256) and for all devices (2000). |
 | Open rooms in all | 200 |
 | Wrong room codes from one address | 30 in 10 minutes. Then the meeting point refuses each room code from that address for 10 minutes, the correct code included. |
 | Wrong room codes from one block of addresses (IPv4 /24, IPv6 /48) | 120 in 10 minutes. Then the same refusal for the block. |
-| Counts of wrong room codes | A maximum of 30,000. The meeting point removes old counts one time each minute. While the list is full, a device with no count that gives a room code gets the answer "busy". |
+| Wrong room codes from one wide block of IPv6 addresses (/32) | 1200 in 10 minutes. Then the same refusal for the wide block. |
+| Counts of wrong room codes | A maximum of 30,000. The meeting point makes a count only for a wrong room code, and removes old counts one time each minute. While the list is full, the meeting point does not count a wrong room code from an address that has no count, and it refuses nobody for this cause: a device with the correct room code gets in. |
 
 The meeting point gives the same answer, "no room", for a room code that no room has, for a room that has two devices, and for a room that ended. Thus an answer tells a person who guesses nothing about the rooms. With 30 attempts in 10 minutes for one address, and 1,000,000 possible codes, a person who guesses needs much time to find one open room. Then the compared code stops that person.
 
@@ -956,6 +961,7 @@ It obeys these rules for each request:
 
 - It answers only the exact addresses of the table. It supplies no folder of files. `//relays.json` gives status 404.
 - A request has time limits: 10 seconds for the headers, 30 seconds for the request, 1 minute for the answer, and 2 minutes for a connection without a request. The limits do not apply to the meeting point.
+- A maximum of 1024 connections can be open with no request made. When 1024 such connections wait, a new connection ends the connection that waited longest. The time limits do not limit the number of these connections, and nginx limits only the connections of one address.
 - Each answer has these headers:
 
 | Header | Value |
@@ -1025,7 +1031,7 @@ When the server reached the limit:
 
 **What it answers.** Only a Binding request of 20 to 512 bytes with the correct length. It does not read the attributes of a request. It answers nothing to all other packets. It has no TURN function.
 
-**The limit.** One source gets 60 answers in 10 seconds. A source is an IPv4 address, or the /64 network of an IPv6 address. The program holds 50,000 sources at most; when the table is full, a new source gets no answer until the 10 seconds end. A request with a false sender makes the program send at most 2.2 times the bytes that it got (an answer is 32 or 44 bytes; a request is 20 bytes or more).
+**The limit.** One source gets 60 answers in 10 seconds. A source is an IPv4 address, or the /64 network of an IPv6 address. The program holds no address. It has a table of 262,144 counts, and a hash of the source gives the place of the source in the table. The key of the hash is random and changes each time the program starts. The table cannot become full, thus a flood of requests with false senders does not stop the answers to new sources. Two sources can have the same place; they then share one limit. All counts go back to zero when the 10 seconds end. A request with a false sender makes the program send at most 2.2 times the bytes that it got (an answer is 32 or 44 bytes; a request is 20 bytes or more).
 
 **What it keeps.** It writes no file. For the limit, it holds the addresses of the last 10 seconds in memory, and then drops them. One time each hour it writes one line to its log: the number of requests that it answered and the number that it did not. The line has no address.
 
@@ -1148,7 +1154,7 @@ These conditions apply to the use of `pion/webrtc`: TLS with the certificate of 
 - A sender that does not obey the rule for the relay (changed software) can send through the relay after the receiver accepted its offer on a direct path, because only the sender has a guard during an upload (section 7.5).
 - A paired device can keep the one transfer of the receiver occupied for most of each minute with offers for a fetched send that it does not complete (each offer keeps it for a maximum of 20 seconds, 3 each minute). An offer that the owner does not answer does the same for 5 minutes.
 - Many persons can have one public address: some mobile networks and some internet providers put thousands of customers behind a small number of IPv4 addresses, and an office or a school can do the same. These persons share one count of wrong room codes and one limit of 4 open rooms. A person at the same public address, or in the same block of addresses, can thus stop pairing by code for that address on purpose, at a small cost. During the refusal, the meeting point refuses the correct room code also. Nobody gets a pairing or a file in this way, and pairing by link continues to operate.
-- One person with many blocks of addresses can fill the meeting point, the rooms, or the list of counts of wrong room codes. Pairing through the meeting point then stops for new devices while that person continues. Paired devices continue to operate.
+- One person with many blocks of IPv4 addresses, or with many wide blocks of IPv6 addresses, can fill the meeting point or the rooms. Pairing through the meeting point then stops for new devices while that person continues. Paired devices continue to operate. The same person can fill the list of counts of wrong room codes; the meeting point then does not count the wrong room codes of new addresses, and refuses nobody for this cause.
 - A flood of announcements on the local network can keep new devices out of the list of nearby devices for 10 minutes.
 - A bad meeting point can stop pairing through the meeting point (section 9.2). It cannot complete a pairing that the two owners did not confirm.
 - If the app cannot write `withdrawn.json`, it keeps the accepted list in memory only. After the next start, it accepts an older signed list again.

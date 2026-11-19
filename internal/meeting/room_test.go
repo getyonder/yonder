@@ -401,7 +401,7 @@ func TestRoomNames(t *testing.T) {
 
 // A block that is paused makes no new counts for its addresses: wrong
 // codes from many /64s of one /48 leave at most one count for each address
-// that missed before the pause, and one for the block.
+// that missed before the pause, one for the block and one for its wide block.
 func TestRoomMissesOfPausedBlock(t *testing.T) {
 	p, url := point(t, DefaultLimits)
 	for n := range 300 {
@@ -410,13 +410,57 @@ func TestRoomMissesOfPausedBlock(t *testing.T) {
 	p.mu.Lock()
 	size := len(p.misses)
 	p.mu.Unlock()
-	if size > DefaultLimits.BlockMisses+1 {
-		t.Fatalf("%d counts after 300 wrong codes from one /48, want at most %d", size, DefaultLimits.BlockMisses+1)
+	if size > DefaultLimits.BlockMisses+2 {
+		t.Fatalf("%d counts after 300 wrong codes from one /48, want at most %d", size, DefaultLimits.BlockMisses+2)
 	}
 }
 
-// The list of counts has a largest size; while it is full, no room is
-// looked for. Old counts are looked for at most once a minute, and then
+// Over IPv6 a wide block (a /32) has a limit on misses of its own: wrong
+// codes from many /48s, each under its block's limit, get the whole wide
+// block refused, the right code included. Another wide block is not, and
+// neither is IPv4, which has no wide blocks.
+func TestRoomMissesOfWideBlock(t *testing.T) {
+	limits := DefaultLimits
+	limits.WideMisses = 5
+	_, url := point(t, limits)
+	_, code := open(t, url, "198.51.100.9", "A")
+	for n := range 5 {
+		from := fmt.Sprintf("2001:db8:%x::1", n) // a new /48 in the same /32
+		if reason := refused(t, url, from, wrong(code)); reason != ReasonNoRoom {
+			t.Fatalf("%s: closed with %q, want %q", from, reason, ReasonNoRoom)
+		}
+	}
+	if reason := refused(t, url, "2001:db8:ffff::1", code); reason != ReasonBusy {
+		t.Fatalf("a new /48 of the wide block, after five misses: closed with %q, want %q", reason, ReasonBusy)
+	}
+	if reason := refused(t, url, "2001:db9::1", wrong(code)); reason != ReasonNoRoom {
+		t.Fatalf("another wide block: closed with %q, want %q", reason, ReasonNoRoom)
+	}
+	for n := range 6 {
+		from := fmt.Sprintf("203.0.%d.1", n) // a new /24 each
+		if reason := refused(t, url, from, wrong(code)); reason != ReasonNoRoom {
+			t.Fatalf("%s: closed with %q, want %q", from, reason, ReasonNoRoom)
+		}
+	}
+	enter(t, url, "203.0.113.1", "B", code)
+}
+
+// A device that brings the right code leaves no count behind.
+func TestRightCodeMakesNoCount(t *testing.T) {
+	p, url := point(t, DefaultLimits)
+	_, code := open(t, url, "198.51.100.9", "A")
+	enter(t, url, "2001:db8:1:1::1", "B", code)
+	p.mu.Lock()
+	size := len(p.misses)
+	p.mu.Unlock()
+	if size != 0 {
+		t.Fatalf("%d counts of misses after a right code, want none", size)
+	}
+}
+
+// The list of counts has a largest size. While it is full, a miss that has
+// no count is not counted and nobody is refused for that: the right code
+// still gets in. Old counts are looked for at most once a minute, and then
 // forgotten.
 func TestRoomMissesList(t *testing.T) {
 	p, url := point(t, DefaultLimits)
@@ -457,10 +501,26 @@ func TestRoomMissesList(t *testing.T) {
 		t.Fatal("a count was made in a full list")
 	}
 	_, code := open(t, url, "198.51.100.9", "A")
-	if reason := refused(t, url, "203.0.113.1", code); reason != ReasonBusy {
-		t.Fatalf("with the list full: closed with %q, want %q", reason, ReasonBusy)
+	if reason := refused(t, url, "203.0.113.1", wrong(code)); reason != ReasonNoRoom {
+		t.Fatalf("a wrong code with the list full: closed with %q, want %q", reason, ReasonNoRoom)
 	}
-	clock.Add(missWindow)
-	_, code = open(t, url, "198.51.100.9", "C")
-	enter(t, url, "203.0.113.1", "B", code) // the fillers are forgotten
+	if has("address 203.0.113.1") {
+		t.Fatal("a count was made in a full list")
+	}
+	enter(t, url, "203.0.113.1", "B", code)
+}
+
+// One wide block of IPv6 addresses may open only WideRooms rooms, from
+// however many of its blocks.
+func TestRoomsOfOneWideBlock(t *testing.T) {
+	limits := DefaultLimits
+	limits.WideRooms = 3
+	_, url := point(t, limits)
+	for n := range 3 {
+		open(t, url, fmt.Sprintf("2001:db8:%x::1", n), "Opener") // a new /48 in the same /32
+	}
+	if reason := refused(t, url, "2001:db8:ffff::1", nearby.RoomNew); reason != ReasonFull {
+		t.Fatalf("a room past WideRooms from a new /48 of the wide block: closed with %q, want %q", reason, ReasonFull)
+	}
+	open(t, url, "2001:db9::1", "Another wide block")
 }
