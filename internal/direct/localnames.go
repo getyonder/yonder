@@ -14,6 +14,8 @@ import (
 	"github.com/pion/webrtc/v4"
 	"golang.org/x/net/dns/dnsmessage"
 	"golang.org/x/net/ipv4"
+
+	"yonder/internal/ownroute"
 )
 
 // A browser gives its address on the local network as a name that ends in
@@ -115,7 +117,7 @@ func askLocal(ctx context.Context, names []string) map[string]net.IP {
 	defer cancel()
 	ifaces, _ := net.Interfaces()
 	for _, ifi := range ifaces {
-		if ifi.Flags&net.FlagUp == 0 || ifi.Flags&net.FlagMulticast == 0 || ifi.Flags&net.FlagLoopback != 0 || !usableInterface(ifi.Name) {
+		if ifi.Flags&net.FlagUp == 0 || ifi.Flags&net.FlagMulticast == 0 || ifi.Flags&net.FlagLoopback != 0 || !ownroute.UsableInterface(ifi.Name) {
 			continue
 		}
 		// The socket is at port 5353 and in the group, on this interface.
@@ -194,7 +196,7 @@ func localAnswers(packet []byte, names []string) map[string]net.IP {
 		}
 		ip := net.IP(a.A[:])
 		// A ".local" name is a device on this network.
-		if (ip.IsPrivate() || ip.IsLinkLocalUnicast()) && usableIP(ip) {
+		if (ip.IsPrivate() || ip.IsLinkLocalUnicast()) && ownroute.UsableIP(ip) {
 			out[name] = ip
 		}
 	}

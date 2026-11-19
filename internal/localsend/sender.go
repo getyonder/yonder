@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"yonder/internal/identity"
+	"yonder/internal/ownroute"
 )
 
 var (
@@ -119,10 +120,13 @@ func (s *Sender) connect(ctx context.Context, to Peer, addr string, conf *tls.Co
 		}
 		actx, cancel := context.WithTimeout(ctx, wait)
 		var c net.Conn
+		// The connection stays on the interface of the peer's network
+		// (package ownroute says why).
+		d := ownroute.Dialer(host)
 		if conf == nil {
-			c, err = (&net.Dialer{}).DialContext(actx, "tcp", net.JoinHostPort(host, port))
+			c, err = d.DialContext(actx, "tcp", net.JoinHostPort(host, port))
 		} else {
-			c, err = (&tls.Dialer{Config: conf}).DialContext(actx, "tcp", net.JoinHostPort(host, port))
+			c, err = (&tls.Dialer{NetDialer: d, Config: conf}).DialContext(actx, "tcp", net.JoinHostPort(host, port))
 		}
 		cancel()
 		if ctx.Err() != nil {

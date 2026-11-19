@@ -16,6 +16,8 @@ import (
 	"github.com/pion/ice/v4"
 	"github.com/pion/logging"
 	"github.com/pion/webrtc/v4"
+
+	"yonder/internal/ownroute"
 )
 
 // receiverCanWait: pion calls a channel's message callback from one
@@ -46,9 +48,9 @@ func newPeerConnection(cfg Config, limit time.Duration) (*webrtc.PeerConnection,
 		se.SetIncludeLoopbackCandidate(true)
 		se.SetIPFilter(func(ip net.IP) bool { return ip.IsLoopback() })
 	} else {
-		se.SetInterfaceFilter(usableInterface)
-		se.SetIPFilter(usableIP)
-		se.SetRemoteIPFilter(usableIP)
+		se.SetInterfaceFilter(ownroute.UsableInterface)
+		se.SetIPFilter(ownroute.UsableIP)
+		se.SetRemoteIPFilter(ownroute.UsableIP)
 	}
 
 	// pion gives up on a pair of addresses after 7 checks, under two

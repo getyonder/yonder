@@ -60,9 +60,10 @@ func (s *Service) meetNearby() {
 	if s.meeting == "" || s.set.HideNearby || s.meet != nil {
 		return
 	}
+	node := s.node
 	c := &nearby.Client{
 		URL: s.meeting, Name: s.set.Name, Kind: s.kind, Version: app.ToldVersion(s.says), Fingerprint: s.node.Info.Fingerprint,
-		Changed: func() { s.changed(); s.kickFirewall() }, Asked: s.asked,
+		Changed: func() { s.changed(); s.kickFirewall(); node.NetworkChanged() }, Asked: s.asked,
 	}
 	if n := s.node; s.kind == nearby.KindApp {
 		// Tell a nearby Yonder that asks whether this one can connect to it.

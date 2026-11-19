@@ -1,6 +1,6 @@
 # Yonder: design document
 
-This document describes Yonder 0.1.43. It tells you how Yonder works as one system. It shows each part, the function of each part, and the connections between the parts.
+This document describes Yonder 0.1.44. It tells you how Yonder works as one system. It shows each part, the function of each part, and the connections between the parts.
 
 The text follows the rules of ASD-STE100 Simplified Technical English: short sentences, the active voice, and one name for one thing. No STE checker examined the text.
 
@@ -263,7 +263,7 @@ The app can tell the user that a newer version of Yonder is available. It does n
 5. "Get it" opens the download page in the browser. The app opens the address in the file only if it is an `https://` address at the host name of the website (`ownPage` in `internal/gui/update.go`). If it is not, the app opens the download page whose address is in the code.
 6. "Not now" removes the notice. The app stores this version in `settings.json`. The notice comes back only for a version that is newer than the stored version.
 
-The request gives the version of the app and its system in the `User-Agent` line, for example `Yonder/0.1.43 (linux)`. The system is `windows`, `macos` or `linux`. The request contains no name and no identifier of the device. The server uses the two values for its daily totals (section 13.2). One function makes this text (`Name` in `internal/tally/agent`), and it is adjacent to the function of the server that reads it. If the request fails, the app shows nothing and asks again after 24 hours.
+The request gives the version of the app and its system in the `User-Agent` line, for example `Yonder/0.1.44 (linux)`. The system is `windows`, `macos` or `linux`. The request contains no name and no identifier of the device. The server uses the two values for its daily totals (section 13.2). One function makes this text (`Name` in `internal/tally/agent`), and it is adjacent to the function of the server that reads it. If the request fails, the app shows nothing and asks again after 24 hours.
 
 The setting "Tell me when a new version is out" is on by default. When it is off, the app sends no request.
 
@@ -277,7 +277,7 @@ The app can tell the user that its version is withdrawn. A withdrawn version is 
 
 ```json
 {
-  "version": "0.1.43",
+  "version": "0.1.44",
   "page": "https://getyonder.org/#download",
   "withdrawn": "<the bytes of the list, in base64>",
   "signature": "<the Ed25519 signature of those bytes, in base64>"
@@ -438,6 +438,33 @@ The receiver can do one transfer at a time. It reads an offer before it gives th
 ### 6.4 The firewall notice
 
 A firewall can keep other devices out when the app can still send. The app shows a notice when it finds that a firewall blocks it. A second Yonder can do a check through the meeting point: it tries to connect to the first device on the local network and reports the result. The second Yonder says "yes" only when the certificate of the first device answers. Thus the check cannot examine other computers.
+
+**A VPN that takes the traffic of the network.** On Linux, the app also examines whether the system sends the traffic for its own local network out through a different interface (`Diverted` in `internal/firewall`, file `diverted.go`). A VPN does this when it takes the route of the network (section 6.5). For each local network, the app connects a UDP socket to a second address of that network and reads the local address of the socket. A connected UDP socket sends no packet. If the local address is not an address of the interface of that network, the traffic is diverted. When a second Yonder cannot connect, the traffic is diverted, and no rule of the firewall is known to be absent, the notice has the title "A VPN on this computer is taking your network's traffic". This notice has no button, because the firewall is not the cause. On Windows and macOS, the app does not examine this. On Linux, the ties of section 6.5 keep such a route from the connections of the app. Thus the notice is for a condition that the ties do not correct.
+
+### 6.5 Local traffic stays on its interface (Linux)
+
+A routing rule of the system can take the traffic for the local network away. Tailscale does this on Linux when a device of the tailnet advertises the subnet that the computer is in, and the computer accepts such routes. The system then sends each packet for a device on the local network into the tunnel of Tailscale. A connection from the network to the app cannot complete, because the answers of the app do not go back to the network. A connection from the app to a nearby device goes into the tunnel.
+
+On Linux, the app ties each of its sockets for the local network to an interface (`SO_BINDTODEVICE`). For a socket that is tied, the system does not use a route that names a different interface. One package has this function, `internal/ownroute`, and each part of the app calls it:
+
+- **Connections that go out.** `ownroute.Dialer` makes the dialer for each connection to a nearby device. The sender of the LocalSend side uses it (`internal/localsend/sender.go`), and the check for a second Yonder uses it (`Reaches`, section 6.4). The dialer is tied to the interface whose network contains the address of the other device (`InterfaceFor`).
+- **When a dialer is not tied.** A dialer is not tied for the loopback, for an address of the computer itself, for an address that is not private or link-local, and for an address that names its interface (`fe80::1%eth0`). It is also not tied when no interface, or more than one interface, has a network that contains the address.
+- **Connections that come in.** The app keeps its listener for all interfaces. Adjacent to it, the app opens one more listener for each interface of a local network, at the same port, for IPv4 (`ownroute.Listen`). An interface of a local network has a private IPv4 address, and its name is not in the list of interfaces that lead to no device (Docker, bridges, virtual machines, VPNs and Tailscale). The system gives a connection that arrives on that interface to the tied listener, and the answers go out through that interface. The first listener gets all other connections, for example those from the loopback. All the listeners give their connections to one server.
+- **The port.** The first listener gets the port as before. Thus the rule for a port that a different program has does not change. Then the app sets `SO_REUSEPORT` on the first listener (`ownroute.Share`), and each tied listener sets it before it gets the port. The system refuses a listener that does not set it.
+- **Interfaces change.** The app looks at the interfaces every 10 seconds, and when the list of the meeting point changes (`internal/app/tied.go`). It closes the listener of an interface that is gone, and it opens a listener for a new interface. The name and the index identify an interface: an interface that goes and comes back has a new index.
+- **The data channels.** The UDP sockets of a data channel are tied with the same package (section 8).
+- An app that listens at one address gets no tied listeners. The tests listen at `127.0.0.1`.
+- If the tie of a dialer fails, the socket stays as the system made it.
+- Discovery needs no change. Each multicast socket names its interface, and the route table of Tailscale contains no route for the multicast group.
+- A strict reverse-path filter on the interface (`rp_filter` set to 1) drops the packets from the network before a socket gets them. The tie cannot correct this.
+- On Windows and macOS, the functions of the package do nothing (`ownroute_other.go`). It is not known whether these systems need the tie.
+
+Tests:
+
+- `internal/ownroute`: the two functions that select an interface, with lists of interfaces that the test makes; the tie of a listener and of a dialer, read back from the socket; a tied listener adjacent to the first listener (the tied listener gets a connection to the address of its interface, the first listener gets a connection to the loopback, and a second listener without the tie is refused).
+- `internal/app`: the listeners follow a list of interfaces that the test changes; an app that listens on all interfaces answers at the address of an interface.
+- `internal/firewall` and `internal/gui`: the diverted traffic with a look-up that the test supplies, and each form of the notice.
+- The usual test run cannot make such a route, because that needs a network of its own. The script `internal/ownroute/testdata/route.sh` makes one without root: two network namespaces with a cable between them, and a route that takes the network of the cable away as Tailscale does. In it, the test `TestUnderRouteThatDiverts` makes sure that the tied listener gets a connection from the other namespace and that the tied dialer connects to it. The script needs user namespaces, `nsenter`, `ip` and `python3`. Without the script, the test run skips this test.
 
 ## 7. The tunnel
 
@@ -667,7 +694,7 @@ A data channel carries uploads only. These things continue to need the tunnel it
 - In a browser this code does nothing (`localnames_js.go`), because the browser finds the names itself.
 - The setting is `Config.MDNS`. The app sets it (`internal/app/channel.go`).
 
-**The sockets stay on their interface (Linux).** On Linux, the app ties each UDP socket of a data channel to the interface that has the address of the socket (`SO_BINDTODEVICE`, `internal/direct/ownroute_linux.go`). A routing rule of the system can take a packet for the local network away. Tailscale does this on Linux when a device of the tailnet advertises the subnet that the computer is in, and the computer accepts such routes. Without the tie, the checks to a device on the same network go into that tunnel and get no answer.
+**The sockets stay on their interface (Linux).** On Linux, the app ties each UDP socket of a data channel to the interface that has the address of the socket (`SO_BINDTODEVICE`; the package `internal/ownroute`, section 6.5). A routing rule of the system can take a packet for the local network away. Tailscale does this on Linux when a device of the tailnet advertises the subnet that the computer is in, and the computer accepts such routes. Without the tie, the checks to a device on the same network go into that tunnel and get no answer.
 
 - A socket for the loopback, or for no specified address, is not tied.
 - If the tie fails, the socket stays as the system made it.
@@ -1098,7 +1125,8 @@ Yonder is one Go module, `yonder`.
 | `internal/nearby` | The client for the meeting point, the client for a room, and the key agreement |
 | `internal/meeting` | The meeting point (server side), with its groups and its rooms |
 | `internal/settings` | The name, the save folder, and the selections of the user |
-| `internal/firewall` | Reads the condition of the firewall on each operating system |
+| `internal/ownroute` | The tie of a socket to its network interface on Linux, and the list of the interfaces that lead to no device (section 6.5). It imports no other package of Yonder. |
+| `internal/firewall` | Reads the condition of the firewall on each operating system, and on Linux whether the traffic of the local network is diverted (section 6.4) |
 | `internal/usage` | Counts the bytes that the server sends in a month (section 13.3) |
 | `internal/tally` | The count (section 13.2): the totals of each day in a SQLite file, and the place of an address. Only the application server uses it. |
 | `internal/tally/agent` | The text that an app sends with its update check (section 5.4), and the function that reads it. It is apart from `internal/tally` so that the app and the web app do not contain SQLite; a test makes sure of this. |
@@ -1106,7 +1134,7 @@ Yonder is one Go module, `yonder`.
 | `internal/proxyline` | Reads the address of the visitor that a proxy supplies (section 13.1) |
 | `internal/withdrawn` | The signed list of withdrawn versions, its public key, and the check of a list (section 5.4). It is apart from `internal/gui` so that `yonder-withdraw` and `api.sh` use the same code and key without the app. |
 
-**The scripts** are in `packaging/`. `build.sh` makes the packages for Linux, Windows and macOS, and the file `SHA256SUMS`. `api.sh` makes the release of the service, and `webapp.sh` makes the files of the web app. Each operates without the others. `licences.sh` makes the file with the licences of the software that Yonder contains.
+**The scripts** are in `packaging/`. `build.sh` makes the packages for Linux, Windows and macOS, and the file `SHA256SUMS`. With `YONDER_SIGN=1`, it calls `sign-macos.sh` for each of the two Mac apps before it packs them. That script signs the app with an Apple Developer ID and the hardened runtime, sends it to the notary service of Apple, and attaches the ticket of the notary to the app. It uses `rcodesign` (the project `apple-codesign`), which does this on Linux, and it gets the certificate and the keys as files that the environment names (the top of the script lists them). Without `YONDER_SIGN=1`, nothing is signed. `api.sh` makes the release of the service, and `webapp.sh` makes the files of the web app. Each operates without the others. `licences.sh` makes the file with the licences of the software that Yonder contains.
 
 Four rules keep the structure simple:
 
@@ -1157,7 +1185,7 @@ These conditions apply to the use of `pion/webrtc`: TLS with the certificate of 
 | The website and the application | The website supplies no code that the app or the web app uses. The application server lets a page of the website read one answer only, `/status.json`, which is not a secret (section 13.1). |
 | The send log | Only the owner can read it. It has a maximum size of 1 MB. A different device cannot make a line long, start a line of its own, or put a file name in it (section 5.2). |
 | The socket for terminal commands | Only the owner can open it. A program of the owner can list the devices and send files, as it can with the terminal commands. It cannot read keys or addresses through the socket. |
-| The packages | `packaging/build.sh` writes the file `SHA256SUMS` with the checksum of each package. The packages are not signed. |
+| The packages | `packaging/build.sh` writes the file `SHA256SUMS` with the checksum of each package. The Mac packages of a release are signed with an Apple Developer ID and notarized by Apple. The Windows package and the Linux package are not signed. |
 
 **What Yonder's servers can see:** the internet addresses of connected devices, the times, and the quantity of data of the tunnel messages that the relay passes. This quantity does not include files. At the meeting point, the application server also sees the names and the versions of Yonder of devices that are at the same public address, and the names and room codes of devices in a room. The STUN server sees the public address of a device that asks.
 
@@ -1186,7 +1214,8 @@ These conditions apply to the use of `pion/webrtc`: TLS with the certificate of 
 - **The look-up of `.local` names is tried on Linux only** (section 8). On Windows and macOS, the mDNS service of the system uses port 5353 also, and the app shares the port with it. The look-up asks for IPv4 addresses only.
 - **A web app without a selected folder keeps received files in memory** (section 12.3). The files are lost if the user closes the page before a save.
 - **A page stops when the screen of a telephone locks** (section 12.4).
-- **The packages are not signed.** Windows and macOS show a warning at the first start. The file `SHA256SUMS` lets a person examine a download, and a person can build the app from this repository.
+- **The Windows package is not signed.** Windows shows a warning at the first start. The Mac packages of a release are signed and notarized, and the signature names the developer. The Linux package is not signed. The file `SHA256SUMS` lets a person examine a download, and a person can build the app from this repository.
+- **Local traffic is tied to its interface on Linux only** (section 6.5). It is not known whether Windows or macOS need the tie when a VPN takes the route of the local network. A strict reverse-path filter on Linux keeps the packets out before the tie can help.
 - **There is one relay.** The apps can use a list of relays (section 7.2), but at this time the list has only the main relay. The home relay does not go back automatically to a relay that operates again.
 - **The receiver does one transfer at a time** (section 6.3).
 - **An offline device and a device that removed the pairing look the same** (section 10.1).

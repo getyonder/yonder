@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"yonder/internal/ownroute"
 )
 
 // Manual is whether Fix only opens the system's settings, leaving the
@@ -23,8 +25,15 @@ var (
 )
 
 // Check reads ufw's files or asks firewalld; neither needs a password.
-// Other firewalls cannot be read and come back as off.
+// Other firewalls cannot be read and come back as off. It also looks
+// whether the local network's traffic is diverted (diverted.go).
 func Check(port int) Status {
+	s := check(port)
+	s.Diverted = diverted(ownroute.Local(), sourceFor)
+	return s
+}
+
+func check(port int) Status {
 	if on, missing, err := ufw(port); on {
 		return Status{On: true, Blocking: err == nil && len(missing) > 0 && missing[0] == needed(port)[0]}
 	}

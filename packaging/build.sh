@@ -3,8 +3,17 @@
 # Needs Go, zip and tar; for the Linux build also GTK3 and webkit2gtk-4.1
 # with their headers. Windows and macOS need no C compiler: Wails drives
 # them without cgo (the `purego` tag on macOS).
+#
+# With YONDER_SIGN=1 the two Mac apps are signed with an Apple Developer ID
+# and notarized before they are packed (packaging/sign-macos.sh says which
+# files it needs). Without it nothing is signed.
 set -eu
 cd "$(dirname "$0")/.."
+sign=${YONDER_SIGN:-}
+if [ "$sign" = 1 ] && ! command -v "${RCODESIGN:-rcodesign}" >/dev/null; then
+	echo "YONDER_SIGN=1 needs rcodesign (set RCODESIGN, or put it on the PATH)" >&2
+	exit 1
+fi
 version=$(sed -n 's/^const version = "\(.*\)"$/\1/p' cmd/yonder/main.go)
 # The version that Windows shows in the properties of Yonder.exe is in a
 # file kept in the repo, which must be made again with each new version.
@@ -52,6 +61,9 @@ for arch in arm64 amd64; do
 	sed "s/VERSION/$version/g" packaging/macos/Info.plist > "$app/Info.plist"
 	cp packaging/macos/icon.icns "$app/Resources/icon.icns"
 	with_licences "$app/Resources/licences"
+	if [ "$sign" = 1 ]; then
+		packaging/sign-macos.sh "$out/Yonder.app"
+	fi
 	(cd dist && zip -qr "$(basename "$out").zip" "$(basename "$out")")
 done
 

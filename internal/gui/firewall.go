@@ -21,6 +21,9 @@ import (
 // cannot connect to this one (the catch-all, through the meeting point),
 // and on the Mac the network refusing what Yonder sends, which is how a
 // denied Local Network permission shows.
+// When another Yonder cannot connect and the system is seen to send the
+// local network's traffic out by another interface (firewall.Status,
+// Diverted), the notice names that cause and not the firewall.
 
 const (
 	// firewallEvery is how often the firewall is looked at while all
@@ -53,6 +56,11 @@ func (s *Service) blocked() (*Blocked, string) {
 			Text:   "Yonder can't find devices on your network or send to them. Paired devices are not affected. In System Settings, go to Privacy & Security, then Local Network, and turn on Yonder.",
 			Button: "Open Settings…",
 		}, "macOS is keeping Yonder off your network"
+	case s.unreached && s.fw.Diverted && !s.fw.Blocking:
+		return &Blocked{
+			Title: "A VPN on this computer is taking your network's traffic",
+			Text:  "Another Yonder on your network could not reach this one, because this computer sends its answers into a VPN, not onto the network. Paired devices are not affected.",
+		}, "A VPN is taking your network's traffic"
 	case s.fw.Blocking, s.unreached && s.fw.On:
 		b := &Blocked{
 			Title:  "This computer's firewall is keeping other devices out",

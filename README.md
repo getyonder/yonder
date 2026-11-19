@@ -37,6 +37,8 @@ GOOS=js GOARCH=wasm go build -o yonder.wasm ./cmd/yonder-web   # the web app's p
 
 A plain `go build` gives a window that has the web view's developer tools. The packages are built with the `production` tag, which leaves them out.
 
+The Mac packages of a release are signed with an Apple Developer ID and notarized; the Windows package is not signed yet. `YONDER_SIGN=1 packaging/build.sh` signs the Mac apps of a build with your own certificate: `packaging/sign-macos.sh` says what it needs.
+
 ## Contact
 
 Questions and faults: <hello@getyonder.org>, or an issue in this repository. How Yonder treats your data: <https://getyonder.org/privacy/>

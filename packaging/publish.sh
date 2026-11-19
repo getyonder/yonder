@@ -9,11 +9,12 @@
 #	                                      wants manifest.json there), with Yonder's licence text
 set -eu
 # What stays private: the usage page's program with the package only it
-# uses, and the website's build script. The website (website/) and the
+# uses, the website's build script, and the script that builds a release
+# with Yonder's own signing keys. The website (website/) and the
 # servers' settings (server/) are at the top and are never copied. The
 # service (cmd/yonder-api), the STUN server and the tool that signs the
 # withdrawn list are public since 0.1.41, the first public version.
-private="cmd/yonder-stats internal/stats packaging/website.sh"
+private="cmd/yonder-stats internal/stats packaging/website.sh packaging/release-build.sh"
 what=yonder
 [ "${1:-}" = omarchy ] && { what=omarchy; shift; }
 [ $# -eq 1 ] || { echo "usage: packaging/publish.sh [omarchy] FOLDER" >&2; exit 2; }

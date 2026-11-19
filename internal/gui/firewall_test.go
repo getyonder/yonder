@@ -143,3 +143,41 @@ func TestSendFallsBackToTunnel(t *testing.T) {
 		t.Fatalf("received %q, %v", got, err)
 	}
 }
+
+// Which notice each cause raises. A VPN that takes the network's traffic
+// is named only when another Yonder could not connect and no firewall
+// rule is known to be missing; the three older notices are as they were.
+func TestBlockedNamesTheCause(t *testing.T) {
+	const (
+		mac      = "macOS is keeping Yonder off your network"
+		wall     = "This computer's firewall is keeping other devices out"
+		vpn      = "A VPN on this computer is taking your network's traffic"
+		whatever = "Something is keeping other devices out"
+	)
+	for name, c := range map[string]struct {
+		localnet, unreached bool
+		fw                  firewall.Status
+		title, line         string
+		button              bool
+	}{
+		"all well":                           {},
+		"diverted, but reached":              {fw: firewall.Status{Diverted: true}},
+		"a firewall that is on, and reached": {fw: firewall.Status{On: true, Diverted: true}},
+		"the Mac's permission":               {localnet: true, unreached: true, fw: firewall.Status{On: true, Blocking: true, Diverted: true}, title: mac, line: mac, button: true},
+		"a rule is missing":                  {fw: firewall.Status{On: true, Blocking: true}, title: wall, line: "Firewall is keeping other devices out", button: true},
+		"a rule is missing, and diverted":    {unreached: true, fw: firewall.Status{On: true, Blocking: true, Diverted: true}, title: wall, line: "Firewall is keeping other devices out", button: true},
+		"not reached, a firewall is on":      {unreached: true, fw: firewall.Status{On: true}, title: wall, line: "Firewall is keeping other devices out", button: true},
+		"not reached, nothing read":          {unreached: true, title: whatever, line: whatever},
+		"not reached, diverted":              {unreached: true, fw: firewall.Status{Diverted: true}, title: vpn, line: "A VPN is taking your network's traffic"},
+		"not reached, diverted, firewall on": {unreached: true, fw: firewall.Status{On: true, Diverted: true}, title: vpn, line: "A VPN is taking your network's traffic"},
+	} {
+		s := &Service{localnet: c.localnet, unreached: c.unreached, fw: c.fw}
+		b, line := s.blocked()
+		switch {
+		case c.title == "" && (b != nil || line != ""):
+			t.Errorf("%s: notice %+v, line %q; want none", name, b, line)
+		case c.title != "" && (b == nil || b.Title != c.title || line != c.line || (b.Button != "") != c.button):
+			t.Errorf("%s: notice %+v, line %q; want %q, line %q, button %v", name, b, line, c.title, c.line, c.button)
+		}
+	}
+}

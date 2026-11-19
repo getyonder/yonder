@@ -20,6 +20,10 @@ type Status struct {
 	On bool
 	// Blocking means it is known to keep devices out of Yonder's port.
 	Blocking bool
+	// Diverted means the system sends traffic for this computer's own
+	// local network out by another interface, as a VPN does that takes
+	// the network's route. No firewall rule changes that.
+	Diverted bool
 }
 
 // ErrCancelled means the person backed out of the system's prompt.

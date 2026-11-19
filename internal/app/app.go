@@ -23,6 +23,7 @@ import (
 
 	"yonder/internal/identity"
 	"yonder/internal/localsend"
+	"yonder/internal/ownroute"
 	"yonder/internal/pairing"
 	"yonder/internal/tally/agent"
 	"yonder/internal/tunnel"
@@ -97,6 +98,10 @@ type Node struct {
 	said    map[string]string      // the version each of them said it has, by fingerprint
 	renewed map[string]bool        // paired devices a new connection is being made to, by fingerprint
 	finding map[string]*sync.Mutex // one search for a moved device at a time, by fingerprint
+	// tied keeps the listeners that are tied to an interface (tied.go);
+	// nil when there are none. tiedKick has it look at the interfaces now.
+	tied     *tied
+	tiedKick chan struct{}
 	// For CheckHome: checks in a row the home relay did not answer, how
 	// many it takes before the tunnel is opened again, and whether CheckHome
 	// closed a tunnel it could not open again.
@@ -256,25 +261,26 @@ func Start(cfg Config) (*Node, error) {
 			Port:        ln.Addr().(*net.TCPAddr).Port,
 			Protocol:    "https",
 		},
-		Nearby:  &localsend.Registry{Self: id.Fingerprint},
-		store:   store,
-		keys:    keys,
-		selfID:  selfID,
-		tlsCfg:  id.TLSConfig(),
-		lender:  &localsend.Lender{},
-		clients: map[string]link{},
-		sending: map[string]int{},
-		lending: map[string]int{},
-		web:     map[string]bool{},
-		fetches: map[string]bool{},
-		looking: map[string]bool{},
-		started: rand.Text(),
-		starts:  map[string]string{},
-		version: ToldVersion(cfg.Version),
-		heard:   map[string]bool{},
-		said:    map[string]string{},
-		renewed: map[string]bool{},
-		finding: map[string]*sync.Mutex{},
+		Nearby:   &localsend.Registry{Self: id.Fingerprint},
+		store:    store,
+		keys:     keys,
+		selfID:   selfID,
+		tlsCfg:   id.TLSConfig(),
+		lender:   &localsend.Lender{},
+		clients:  map[string]link{},
+		sending:  map[string]int{},
+		lending:  map[string]int{},
+		web:      map[string]bool{},
+		fetches:  map[string]bool{},
+		looking:  map[string]bool{},
+		started:  rand.Text(),
+		starts:   map[string]string{},
+		version:  ToldVersion(cfg.Version),
+		heard:    map[string]bool{},
+		said:     map[string]string{},
+		renewed:  map[string]bool{},
+		finding:  map[string]*sync.Mutex{},
+		tiedKick: make(chan struct{}, 1),
 	}
 	if !cfg.Browser {
 		n.log = openTrace(cfg.Dir)
@@ -327,6 +333,13 @@ func Start(cfg Config) (*Node, error) {
 		return slices.ContainsFunc(devices, func(d pairing.Device) bool { return strings.EqualFold(d.Fingerprint, fingerprint) })
 	}
 	go n.serve(ln, false)
+	if host, _, _ := net.SplitHostPort(addr); host == "" && ownroute.Share(ln) == nil {
+		// Beside the listener for every interface, one for each interface
+		// of a local network (tied.go). A listener at one address gets
+		// none.
+		n.tied = &tied{port: n.Info.Port, list: ownroute.Local, open: ownroute.Listen, serve: func(ln net.Listener) { n.serve(ln, false) }}
+		go n.tied.run(n.ctx, n.tiedKick)
+	}
 	return n, nil
 }
 
@@ -1058,13 +1071,10 @@ func (n *Node) NearbyOnline(ctx context.Context, p localsend.Peer) bool {
 // reached, so the answer says nothing about other machines. Addresses on
 // the internet are not tried.
 func (n *Node) Reaches(ctx context.Context, addrs []string, is func(fingerprint string) bool) bool {
-	dialer := &tls.Dialer{
-		NetDialer: &net.Dialer{Timeout: nearbyWait / 2},
-		Config: &tls.Config{
-			InsecureSkipVerify: true, // who answered is checked by is
-			GetClientCertificate: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
-				return &n.sender.Cert, nil
-			},
+	conf := &tls.Config{
+		InsecureSkipVerify: true, // who answered is checked by is
+		GetClientCertificate: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
+			return &n.sender.Cert, nil
 		},
 	}
 	for _, a := range addrs {
@@ -1072,7 +1082,9 @@ func (n *Node) Reaches(ctx context.Context, addrs []string, is func(fingerprint 
 		if ip := ap.Addr(); err != nil || !(ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLoopback()) {
 			continue
 		}
-		conn, err := dialer.DialContext(ctx, "tcp", ap.String())
+		d := ownroute.Dialer(ap.Addr().String())
+		d.Timeout = nearbyWait / 2
+		conn, err := (&tls.Dialer{NetDialer: d, Config: conf}).DialContext(ctx, "tcp", ap.String())
 		if err != nil {
 			continue
 		}
