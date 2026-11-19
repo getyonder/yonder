@@ -47,7 +47,9 @@ type result struct {
 	err error
 }
 
-var local = Config{Loopback: true}
+// MDNS is set as in the app: a description with no ".local" name must
+// send no question to the network.
+var local = Config{Loopback: true, MDNS: true}
 
 // connect gives two Peers, connected to each other over loopback.
 func connect(t *testing.T) (a, b *Peer) {

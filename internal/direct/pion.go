@@ -35,11 +35,12 @@ func newPeerConnection(cfg Config, limit time.Duration) (*webrtc.PeerConnection,
 	// descriptions and addresses.
 	se.LoggerFactory = quiet{}
 
-	if cfg.MDNS {
-		se.SetICEMulticastDNSMode(ice.MulticastDNSModeQueryOnly)
-	} else {
-		se.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
+	if n, err := newOwnRoute(); err == nil && n != nil && !cfg.Loopback {
+		se.SetNet(n)
 	}
+
+	// The ".local" names are asked for in localnames.go, not by pion.
+	se.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
 
 	if cfg.Loopback {
 		se.SetIncludeLoopbackCandidate(true)

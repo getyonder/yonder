@@ -1,6 +1,6 @@
 # Yonder: design document
 
-This document describes Yonder 0.1.42. It tells you how Yonder works as one system. It shows each part, the function of each part, and the connections between the parts.
+This document describes Yonder 0.1.43. It tells you how Yonder works as one system. It shows each part, the function of each part, and the connections between the parts.
 
 The text follows the rules of ASD-STE100 Simplified Technical English: short sentences, the active voice, and one name for one thing. No STE checker examined the text.
 
@@ -263,7 +263,7 @@ The app can tell the user that a newer version of Yonder is available. It does n
 5. "Get it" opens the download page in the browser. The app opens the address in the file only if it is an `https://` address at the host name of the website (`ownPage` in `internal/gui/update.go`). If it is not, the app opens the download page whose address is in the code.
 6. "Not now" removes the notice. The app stores this version in `settings.json`. The notice comes back only for a version that is newer than the stored version.
 
-The request gives the version of the app and its system in the `User-Agent` line, for example `Yonder/0.1.42 (linux)`. The system is `windows`, `macos` or `linux`. The request contains no name and no identifier of the device. The server uses the two values for its daily totals (section 13.2). One function makes this text (`Name` in `internal/tally/agent`), and it is adjacent to the function of the server that reads it. If the request fails, the app shows nothing and asks again after 24 hours.
+The request gives the version of the app and its system in the `User-Agent` line, for example `Yonder/0.1.43 (linux)`. The system is `windows`, `macos` or `linux`. The request contains no name and no identifier of the device. The server uses the two values for its daily totals (section 13.2). One function makes this text (`Name` in `internal/tally/agent`), and it is adjacent to the function of the server that reads it. If the request fails, the app shows nothing and asks again after 24 hours.
 
 The setting "Tell me when a new version is out" is on by default. When it is off, the app sends no request.
 
@@ -277,7 +277,7 @@ The app can tell the user that its version is withdrawn. A withdrawn version is 
 
 ```json
 {
-  "version": "0.1.42",
+  "version": "0.1.43",
   "page": "https://getyonder.org/#download",
   "withdrawn": "<the bytes of the list, in base64>",
   "signature": "<the Ed25519 signature of those bytes, in base64>"
@@ -653,7 +653,25 @@ A data channel carries uploads only. These things continue to need the tunnel it
 - If the two STUN servers give no answer, a device offers only its own addresses. Then a data channel forms only when the two devices are on one network.
 - The two paired devices see the addresses of each other, because they connect directly. This is also true for two apps on a direct path.
 
-**No relay for a data channel.** WebRTC can use a relay of its own type (a TURN server). Yonder uses none, and `internal/direct` refuses a configuration that has one. The names of devices on the local network (mDNS) are off in the app.
+**No relay for a data channel.** WebRTC can use a relay of its own type (a TURN server). Yonder uses none, and `internal/direct` refuses a configuration that has one.
+
+**The local names of a browser.** A browser does not give its address on the local network. It gives a name that ends in `.local`. Only a question to the local network (mDNS) gives the address for that name. The app must have the address. Without it, the app cannot send to the browser first, and a firewall on the computer of the app that lets in only answers drops each check that the browser sends. Then no data channel forms between an app behind such a firewall and a web app on one network.
+
+- The mDNS function of the library stays off. The library asks from a port of its own. A device sends the answer to such a question to that port only, and the firewall drops the answer.
+- The app asks for the names itself (`internal/direct/localnames.go`), from the mDNS port, 5353. The answer to a question from that port goes to the mDNS group, thus to the full network, and a firewall usually lets it in (ufw does so with its default rules).
+- The app asks only while it takes in the description of the other device: for 1.5 seconds at most, with one question each 0.4 seconds, on each interface that it uses for a path. It asks for 8 names at most from one description. A description with no `.local` name sends no question.
+- The DNS parser of Go (`golang.org/x/net/dns/dnsmessage`) reads the packets. The app uses only an IPv4 address for a name that it asked for, and only if the address is private or link-local and is not an address of Tailscale. All other records are ignored.
+- The app writes the address into the description in place of the name. Then it gives the description to the library. A name with no answer stays, and the library ignores it.
+- A device on the local network can give a false answer. Then the checks go to a wrong local address, and no channel forms on that address. The other device is still proven by the fingerprint in its description and by the TLS in the channel.
+- A panic while a packet is read stops the reading for that description, not the app.
+- In a browser this code does nothing (`localnames_js.go`), because the browser finds the names itself.
+- The setting is `Config.MDNS`. The app sets it (`internal/app/channel.go`).
+
+**The sockets stay on their interface (Linux).** On Linux, the app ties each UDP socket of a data channel to the interface that has the address of the socket (`SO_BINDTODEVICE`, `internal/direct/ownroute_linux.go`). A routing rule of the system can take a packet for the local network away. Tailscale does this on Linux when a device of the tailnet advertises the subnet that the computer is in, and the computer accepts such routes. Without the tie, the checks to a device on the same network go into that tunnel and get no answer.
+
+- A socket for the loopback, or for no specified address, is not tied.
+- If the tie fails, the socket stays as the system made it.
+- On Windows and macOS, no socket is tied (`ownroute_other.go`).
 
 **What the user sees.**
 
@@ -1107,7 +1125,7 @@ Four rules keep the structure simple:
 | `coder/websocket` | The connection to the meeting point, in the app, in WebAssembly and in the server |
 | `modernc.org/sqlite` | The totals of the count. It has no C code. It is in `yonder-api` only, never in the app or the web app. |
 
-These conditions apply to the use of `pion/webrtc`: TLS with the certificate of the pairing always operates in the channel; only the stable v4 line is used; the advisories of pion are read before each release; the part that a different device can reach stays small (mDNS is off); and a fault of the library must stop one transfer, not the app. The last condition is not fully met (section 16).
+These conditions apply to the use of `pion/webrtc`: TLS with the certificate of the pairing always operates in the channel; only the stable v4 line is used; the advisories of pion are read before each release; the part that a different device can reach stays small (the mDNS function of the library is off, and the app asks for the `.local` names of a browser itself, with the DNS parser of Go: section 8); and a fault of the library must stop one transfer, not the app. The last condition is not fully met (section 16).
 
 ## 15. Security summary
 
@@ -1165,6 +1183,7 @@ These conditions apply to the use of `pion/webrtc`: TLS with the certificate of 
 - **A browser cannot pause a data channel that sends to it.** Bytes that arrived and that the page did not read stay in memory, with no limit. Thus a web app that receives a large file from a fast sender can use much memory.
 - **A fault in the WebRTC library can stop the app.** A panic in a goroutine of the library stops the program. The package `internal/direct` catches panics only in its own callbacks.
 - **In a browser, the browser decides most settings of a data channel.** Yonder cannot set them.
+- **The look-up of `.local` names is tried on Linux only** (section 8). On Windows and macOS, the mDNS service of the system uses port 5353 also, and the app shares the port with it. The look-up asks for IPv4 addresses only.
 - **A web app without a selected folder keeps received files in memory** (section 12.3). The files are lost if the user closes the page before a save.
 - **A page stops when the screen of a telephone locks** (section 12.4).
 - **The packages are not signed.** Windows and macOS show a warning at the first start. The file `SHA256SUMS` lets a person examine a download, and a person can build the app from this repository.

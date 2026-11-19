@@ -99,10 +99,11 @@ type Config struct {
 	// no answer. The first Peer is then dropped and a second one made with
 	// these servers, which costs the time the first one waited.
 	Fallback []string
-	// MDNS lets pion ask the local network for the ".local" names that
-	// browsers give in place of their local addresses. Off, nothing from
-	// the local network is parsed, but an app and a browser on one
-	// network may find no path. It has no effect in a browser.
+	// MDNS asks the local network for the ".local" names that browsers
+	// give in place of their local addresses (localnames.go says how, and
+	// why pion does not do it). Off, nothing from the local network is
+	// parsed, but an app behind a firewall and a browser on one network
+	// find no path. It has no effect in a browser.
 	MDNS bool
 
 	// Loopback is for tests, of this package and of its callers: only the
@@ -158,6 +159,8 @@ type Peer struct {
 
 	// fallback: see AskedFallback. Set before the Peer is given out.
 	fallback bool
+	// mdns is Config.MDNS.
+	mdns bool
 }
 
 // Offer starts a connection. It returns the description to send to the
@@ -184,6 +187,9 @@ func Answer(ctx context.Context, cfg Config, offer []byte) (*Peer, []byte, error
 	remote, err := parse(offer, webrtc.SDPTypeOffer)
 	if err != nil {
 		return nil, nil, err
+	}
+	if cfg.MDNS {
+		remote = localNames(ctx, remote)
 	}
 	return start(ctx, cfg, func(p *Peer) (webrtc.SessionDescription, error) {
 		if err := p.pc.SetRemoteDescription(remote); err != nil {
@@ -242,6 +248,9 @@ func (p *Peer) SetAnswer(answer []byte) error {
 	if err != nil {
 		return err
 	}
+	if p.mdns {
+		remote = localNames(context.Background(), remote)
+	}
 	if err := p.pc.SetRemoteDescription(remote); err != nil {
 		// pion's error can quote the description, so it is not passed on.
 		return ErrDescription
@@ -270,6 +279,7 @@ func newPeer(ctx context.Context, cfg Config) (*Peer, error) {
 		done:     make(chan struct{}),
 		incoming: make(chan *conn, backlog),
 		conns:    map[*conn]struct{}{},
+		mdns:     cfg.MDNS,
 	}
 	p.timer = time.AfterFunc(limit, func() {
 		if !isClosed(p.up) {

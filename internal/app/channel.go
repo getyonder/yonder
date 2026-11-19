@@ -162,7 +162,7 @@ type channelRule struct {
 
 func (n *Node) newChannelRule() channelRule {
 	return channelRule{
-		cfg:  direct.Config{STUN: []string{stunServer}, Fallback: []string{stunFallback}},
+		cfg:  direct.Config{STUN: []string{stunServer}, Fallback: []string{stunFallback}, MDNS: true},
 		wait: channelWait, relay: relayFallBack,
 		most: channelsMost, asks: channelAsks, asksIn: channelAsksIn,
 		answer: direct.Answer, serverTLS: n.channelTLS,

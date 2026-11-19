@@ -45,7 +45,7 @@ func startNode(t *testing.T, cfg Config) *Node {
 	if err != nil {
 		t.Fatal(err)
 	}
-	n.dc.cfg = direct.Config{Loopback: true}
+	n.dc.cfg = direct.Config{Loopback: true, MDNS: n.dc.cfg.MDNS}
 	t.Cleanup(n.Close)
 	return n
 }

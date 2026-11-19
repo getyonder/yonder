@@ -776,3 +776,12 @@ func TestSendOverADataChannelIsNotRelayed(t *testing.T) {
 		t.Fatalf("during the send it was looked at: %v, and shown as relayed: %v", checked, during)
 	}
 }
+
+// The app asks the local network for a browser's ".local" names: without
+// that, an app behind a firewall and a browser on one network find no path.
+func TestChannelRuleAsksForLocalNames(t *testing.T) {
+	n := startNode(t, Config{Dir: t.TempDir(), SaveDir: t.TempDir(), Name: "Local Names", Listen: "127.0.0.1:0"})
+	if !n.dc.cfg.MDNS {
+		t.Error("the data channels do not ask for .local names")
+	}
+}

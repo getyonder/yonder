@@ -7,9 +7,12 @@ require (
 	github.com/pion/ice/v4 v4.4.8
 	github.com/pion/logging v0.2.4
 	github.com/pion/stun/v4 v4.0.1
+	github.com/pion/transport/v5 v5.1.4
 	github.com/pion/webrtc/v4 v4.2.26
 	github.com/tailscale/tailcat v0.7.0
 	github.com/wailsapp/wails/v3 v3.1.0
+	golang.org/x/net v0.62.0
+	golang.org/x/sys v0.50.0
 	modernc.org/sqlite v1.62.0
 	rsc.io/qr v0.2.0
 	tailscale.com v1.104.7
@@ -53,7 +56,6 @@ require (
 	github.com/pion/sctp v1.12.0 // indirect
 	github.com/pion/sdp/v3 v3.0.20 // indirect
 	github.com/pion/srtp/v3 v3.1.3 // indirect
-	github.com/pion/transport/v5 v5.1.4 // indirect
 	github.com/pion/turn/v5 v5.1.3 // indirect
 	github.com/pires/go-proxyproto v0.15.0 // indirect
 	github.com/pkg/sftp v1.13.11 // indirect
@@ -73,9 +75,7 @@ require (
 	go4.org/netipx v0.0.0-20260823151212-3075585bcbeb // indirect
 	golang.org/x/crypto v0.59.0 // indirect
 	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba // indirect
-	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sync v0.25.0 // indirect
-	golang.org/x/sys v0.50.0 // indirect
 	golang.org/x/term v0.48.0 // indirect
 	golang.org/x/text v0.44.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
